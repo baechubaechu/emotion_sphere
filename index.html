@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Emotion Sphere (Google Vision)</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      height: 100%;
+      font-family: sans-serif;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      color: #fff;
+      font-size: 12px;
+      width: 240px;
+      line-height: 1.5;
+    }
+    #ui button {
+      padding: 6px 10px;
+      margin-right: 4px;
+      border-radius: 6px;
+      border: none;
+      background: #ffffff33;
+      color: #fff;
+    }
+    #cam {
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      width: 160px;
+      height: 120px;
+      background: #222;
+      border-radius: 8px;
+      object-fit: cover;
+      z-index: 9;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<div id="container"></div>
+
+<div id="ui">
+  <button id="startBtn">카메라 켜기</button>
+  <button id="snapBtn">사진 찍고 분석</button>
+  <button id="stopBtn">카메라 끄기</button>
+
+  <div id="info">로딩 중...</div>
+</div>
+
+<video id="cam" autoplay playsinline muted></video>
+<canvas id="snap" width="300" height="220" style="display:none;"></canvas>
+
+<script>
+/* ===========================================================
+    1) 서버 주소 설정 (여기만 수정!)
+=========================================================== */
+
+// ngrok로 얻은 주소 뒤에 /analyze 붙이기
+const SERVER_URL = "https://kylie-uninforming-sighingly.ngrok-free.dev/analyze";
+// 예: const SERVER_URL = "https://happy-sheep-1234.ngrok-free.app/analyze";
+
+
+
+/* ===========================================================
+    2) 카메라 제어
+=========================================================== */
+let stream = null;
+
+async function startCamera() {
+  const info = document.getElementById("info");
+  const video = document.getElementById("cam");
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    info.textContent = "카메라가 켜졌습니다. 얼굴을 가운데 두고 '사진 찍고 분석'을 누르세요.";
+  } catch (e) {
+    info.textContent = "카메라 접근 실패: " + e.message;
+    alert("카메라 접근 실패: " + e.message);
+  }
+}
+
+function stopCamera() {
+  const info = document.getElementById("info");
+  const video = document.getElementById("cam");
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    video.srcObject = null;
+    info.textContent = "카메라 꺼짐.";
+  }
+}
+
+
+
+/* ===========================================================
+    3) 사진 캡쳐 → 서버 업로드 → 감정 결과 받기
+=========================================================== */
+async function snapAndAnalyze() {
+  const info = document.getElementById("info");
+  const video = document.getElementById("cam");
+  const canvas = document.getElementById("snap");
+  const ctx = canvas.getContext("2d");
+
+  if (!stream) {
+    info.textContent = "카메라부터 켜주세요!";
+    return;
+  }
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  info.textContent = "이미지 캡쳐 중...";
+
+  canvas.toBlob(async blob => {
+    if (!blob) {
+      info.textContent = "이미지 변환 실패";
+      return;
+    }
+
+    info.textContent = "서버로 전송 중...";
+
+    const form = new FormData();
+    form.append("frame", blob, "frame.jpg");
+
+    try {
+      const res = await fetch(SERVER_URL, {
+        method: "POST",
+        body: form
+      });
+
+      const raw = await res.text();
+      console.log("응답 RAW:", raw);
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        info.textContent = "서버가 JSON이 아닌 응답을 반환함:\n" + raw;
+        return;
+      }
+
+      if (data.status !== "ok") {
+        info.textContent = "분석 실패: " + (data.error || JSON.stringify(data));
+        return;
+      }
+
+      info.textContent = "감정 분석 결과:\n" + JSON.stringify(data.emotions, null, 2);
+
+      updateSphereFromEmotion(data);
+
+    } catch (err) {
+      info.textContent = "요청 실패: " + err;
+    }
+  }, "image/jpeg", 0.9);
+}
+
+document.getElementById("startBtn").addEventListener("click", startCamera);
+document.getElementById("stopBtn").addEventListener("click", stopCamera);
+document.getElementById("snapBtn").addEventListener("click", snapAndAnalyze);
+
+
+/* ===========================================================
+    4) Three.js 감정 구 생성
+=========================================================== */
+let scene, camera, renderer, geometry, points, basePositions;
+
+function initThree() {
+  const container = document.getElementById("container");
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+  camera.position.set(0, 0, 7);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(W, H);
+  container.appendChild(renderer.domElement);
+
+  const count = 1800;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const R = 1;
+
+  for (let i = 0; i < count; i++) {
+    const u = Math.random();
+    const v = Math.random();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+
+    const x = R * Math.sin(phi) * Math.cos(theta);
+    const y = R * Math.sin(phi) * Math.sin(theta);
+    const z = R * Math.cos(phi);
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+
+    colors[i * 3] = 0.5;
+    colors[i * 3 + 1] = 0.5;
+    colors[i * 3 + 2] = 0.5;
+  }
+
+  basePositions = positions.slice();
+
+  geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 0.02,
+    vertexColors: true
+  });
+
+  points = new THREE.Points(geometry, material);
+  scene.add(points);
+
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  document.getElementById("info").textContent =
+    "Three.js 감정 구 초기화 완료!";
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (points) {
+    points.rotation.y += 0.003;
+    points.rotation.x += 0.001;
+  }
+
+  renderer.render(scene, camera);
+}
+
+initThree();
+animate();
+
+
+/* ===========================================================
+    5) 감정 → 구 변형 매핑
+=========================================================== */
+
+function updateSphereFromEmotion(data) {
+  if (!geometry) return;
+
+  const emotions = data.emotions;
+  // Google Vision emotions:
+  // joy, sorrow, anger, surprise
+
+  const joy = emotions.joy;
+  const sorrow = emotions.sorrow;
+  const anger = emotions.anger;
+  const surprise = emotions.surprise;
+
+  const valence = data.valence ?? (joy - sorrow);
+  const arousal = data.arousal ?? (anger + surprise);
+
+  const info = document.getElementById("info");
+  info.textContent =
+    "Google Vision 감정 분석:\n" +
+    `joy: ${joy.toFixed(2)}\n` +
+    `sorrow: ${sorrow.toFixed(2)}\n` +
+    `anger: ${anger.toFixed(2)}\n` +
+    `surprise: ${surprise.toFixed(2)}\n` +
+    `valence: ${valence.toFixed(2)}\n` +
+    `arousal: ${arousal.toFixed(2)}`;
+
+  const positions = geometry.attributes.position;
+  const colors = geometry.attributes.color;
+  const count = positions.count;
+
+  // 구 크기 = valence (기분) 기반
+  const scale = 0.8 + valence;
+  points.scale.set(scale, scale, scale);
+
+  const jitterAmp = arousal * 0.05; // arousal 클수록 더 흔들림
+  const t = performance.now() * 0.001;
+
+  for (let i = 0; i < count; i++) {
+    const bx = basePositions[i * 3];
+    const by = basePositions[i * 3 + 1];
+    const bz = basePositions[i * 3 + 2];
+
+    const jx = jitterAmp * Math.sin(t * 10 + i * 0.3);
+    const jy = jitterAmp * Math.cos(t * 12 + i * 0.5);
+    const jz = jitterAmp * Math.sin(t * 14 + i * 0.7);
+
+    positions.setXYZ(i, bx + jx, by + jy, bz + jz);
+
+    // 색상 매핑
+    let r = 0.2 + joy * 0.8 + anger * 0.4;
+    let g = 0.2 + (1 - sorrow) * 0.6;
+    let b = 0.2 + sorrow * 0.8 + (1 - valence) * 0.4;
+
+    const boost = (arousal + surprise) * 0.4;
+    r = Math.min(1, r + boost);
+    g = Math.min(1, g + boost);
+    b = Math.min(1, b + boost);
+
+    colors.setXYZ(i, r, g, b);
+  }
+
+  positions.needsUpdate = true;
+  colors.needsUpdate = true;
+}
+
+</script>
+</body>
+</html>
