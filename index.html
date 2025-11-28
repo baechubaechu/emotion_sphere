@@ -145,77 +145,64 @@ let stream = null;
 let idleTimer = null;
 const IDLE_LIMIT = 60000; // 1분
 
-// [중요] 1. 접속하자마자 카메라 권한 요청 및 시작
+// 1. 접속하자마자 카메라 권한 요청
 async function initCamera() {
   try {
     console.log("Requesting Camera...");
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { facingMode: "user", width: 640, height: 480 } 
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: 640, height: 480 }
     });
     videoElement.srcObject = stream;
     await videoElement.play();
     console.log("Camera started in background.");
   } catch (e) {
     console.warn("Autoplay blocked or permission denied. Waiting for user gesture.", e);
-    // 여기서 실패해도 괜찮음. startBtn 누를 때 다시 시도함.
   }
 }
 
-// 페이지 로드 시 즉시 실행
 window.addEventListener("load", initCamera);
 
-
-// 2. [TOUCH TO START] 누르면 카메라 화면으로 전환
+// 2. [TOUCH TO START]
 startBtn.addEventListener("click", async () => {
-  // 혹시 로드 시점에 카메라가 안 켜졌으면 지금 다시 켬 (User Gesture)
   if (!stream) {
-    await initCamera(); 
+    await initCamera();
   }
-  
-  // 화면 전환
   showScreen(cameraScreen);
-  
-  // 타이머 시작
   resetIdleTimer();
 });
 
-
-// 3. [SCAN] 버튼 클릭 (핵심 로직 수정)
+// 3. [SCAN]
 scanBtn.addEventListener("click", async () => {
   console.log("Scan button clicked");
 
-  // 혹시라도 스트림이 없으면 다시 시도
   if (!stream) {
     await initCamera();
-    if(!stream) {
-        alert("카메라 오류. 새로고침 해주세요.");
-        return;
+    if (!stream) {
+      alert("카메라 오류. 새로고침 해주세요.");
+      return;
     }
   }
 
-  // 타이머 리셋
   resetIdleTimer();
 
-  // UI 전환: 카메라 숨기고 결과 화면 준비
-  showScreen(null); // 다 숨기고 배경만 보이게
-  retryScreen.classList.remove("hidden"); 
+  // UI 전환
+  showScreen(null);
+  retryScreen.classList.remove("hidden");
   retryScreen.classList.add("active");
-  retryBtn.style.display = "none"; // 버튼은 잠시 숨김
+  retryBtn.style.display = "none";
   infoText.textContent = "에너지를 해석하고 있습니다...";
-  
-  // 분석 효과 (오라 요동침)
+
   setAnalyzingState(true);
 
-  // 캡쳐 및 전송
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  
-  // 캔버스 크기를 비디오 실제 크기에 맞춤
+
   if (videoElement.videoWidth > 0) {
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
   }
-  
+
+  // 좌우반전 캡처
   ctx.save();
   ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
@@ -224,65 +211,57 @@ scanBtn.addEventListener("click", async () => {
   canvas.toBlob(async blob => {
     const form = new FormData();
     form.append("frame", blob, "frame.jpg");
-    
+
     try {
       console.log("Sending to server...");
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
-      if(!res.ok) throw new Error("Server Error");
+      if (!res.ok) throw new Error("Server Error");
       const data = await res.json();
       console.log("Data received:", data);
-      
+
       if (data.status === "ok") {
-        infoText.textContent = ""; 
-        updateAura(data); // 오라 시각화
+        infoText.textContent = "";
+        updateEmotionViz(data); // 감정 시각화 업데이트
       } else {
         infoText.textContent = "인식된 얼굴이 없습니다.";
+        resetEmotion(false);
       }
-    } catch (e) { 
-      console.error(e); 
-      infoText.textContent = "서버 연결 실패"; 
+    } catch (e) {
+      console.error(e);
+      infoText.textContent = "서버 연결 실패";
+      resetEmotion(false);
     } finally {
-      // 분석 완료
       setAnalyzingState(false);
-      
-      // 2초 뒤 다시하기 버튼 등장
       setTimeout(() => {
-        retryBtn.style.display = "block"; 
+        retryBtn.style.display = "block";
       }, 2000);
     }
   }, "image/jpeg", 0.9);
 });
 
-
-// 4. [RE-SCAN] 다시하기
+// 4. [RE-SCAN]
 retryBtn.addEventListener("click", () => {
   resetIdleTimer();
   showScreen(cameraScreen);
-  setBackgroundState(); // 오라를 배경으로
-  
-  // 비디오가 멈췄을 수 있으니 확인
+  setBackgroundState();
   if (videoElement.paused) videoElement.play();
 });
 
-
-// 5. 자동 초기화 (타이머)
+// 5. 자동 초기화
 function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     console.log("Timeout -> Reset to Start Screen");
-    // 초기화 로직
     showScreen(startScreen);
-    resetAura(true); // 오라 끄기
+    resetEmotion(true);
     stopIdleTimer();
   }, IDLE_LIMIT);
 }
-
 function stopIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = null;
 }
 
-// 화면 전환 유틸
 function showScreen(target) {
   [startScreen, cameraScreen, retryScreen].forEach(s => {
     s.classList.remove("active");
@@ -294,198 +273,406 @@ function showScreen(target) {
   }
 }
 
-// 인터랙션 감지 (타이머 연장)
-window.addEventListener("touchstart", () => { if(!startScreen.classList.contains("active")) resetIdleTimer(); });
-window.addEventListener("click", () => { if(!startScreen.classList.contains("active")) resetIdleTimer(); });
+// 인터랙션 감지
+window.addEventListener("touchstart", () => {
+  if (!startScreen.classList.contains("active")) resetIdleTimer();
+});
+window.addEventListener("click", () => {
+  if (!startScreen.classList.contains("active")) resetIdleTimer();
+});
 
 
-/* ================= [2] Three.js 시각화 로직 ================= */
-let scene, camera, renderer, points;
-const PARTICLE_COUNT = 6000;
-let particlesData = []; 
+/* ================= [2] 감정 나침반 Canvas 시각화 ================= */
 
-let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
-let isActive = false; 
-let time = 0;
+// #container 안에 풀스크린 캔버스 하나 추가
+const container = document.getElementById("container");
+const emotionCanvas = document.createElement("canvas");
+emotionCanvas.id = "emotionCanvas";
+emotionCanvas.style.position = "absolute";
+emotionCanvas.style.top = "0";
+emotionCanvas.style.left = "0";
+emotionCanvas.style.width = "100%";
+emotionCanvas.style.height = "100%";
+emotionCanvas.style.pointerEvents = "none"; // 터치 방해하지 않게
+container.appendChild(emotionCanvas);
 
-let targetOpacity = 0.0;
-let targetSpeed = 1.0;
+const ectx = emotionCanvas.getContext("2d");
+let canvasWidth = 0;
+let canvasHeight = 0;
 
-noise.seed(Math.random());
-
-function initThree() {
-  const container = document.getElementById("container");
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000); 
-
-  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
-  camera.position.z = 300; 
-
-  renderer = new THREE.WebGLRenderer({ alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  container.appendChild(renderer.domElement);
-
-  const posArray = new Float32Array(PARTICLE_COUNT * 3);
-  const colorArray = new Float32Array(PARTICLE_COUNT * 3);
-
-  for(let i=0; i<PARTICLE_COUNT; i++) {
-    const x = (Math.random() - 0.5) * 50;
-    const y = -150; 
-    const z = (Math.random() - 0.5) * 50;
-    
-    posArray[i*3] = x;
-    posArray[i*3+1] = y;
-    posArray[i*3+2] = z;
-
-    particlesData.push({
-      vx: 0, vy: 0, vz: 0,
-      life: Math.random(),
-      maxLife: 0.5 + Math.random() * 0.8,
-      seed: Math.random() * 100
-    });
-
-    colorArray[i*3] = 1.0; 
-    colorArray[i*3+1] = 1.0; 
-    colorArray[i*3+2] = 1.0;
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-
-  const material = new THREE.PointsMaterial({
-    size: 4.0,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0, 
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    sizeAttenuation: true
-  });
-
-  points = new THREE.Points(geometry, material);
-  scene.add(points);
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+// hiDPI 대응
+function resizeEmotionCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = container.getBoundingClientRect();
+  canvasWidth = rect.width;
+  canvasHeight = rect.height;
+  emotionCanvas.width = rect.width * dpr;
+  emotionCanvas.height = rect.height * dpr;
+  ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function resetParticle(idx, positions) {
-  const i3 = idx * 3;
-  if (targetOpacity > 0.1) { 
-    const spread = 20; 
-    positions[i3] = (Math.random() - 0.5) * spread;
-    positions[i3+1] = -80 + (Math.random() - 0.5) * spread;
-    positions[i3+2] = (Math.random() - 0.5) * spread;
+window.addEventListener("resize", resizeEmotionCanvas);
+resizeEmotionCanvas();
+
+// 감정 상태
+let currentEmotion = {
+  joy: 0,
+  sorrow: 0,
+  anger: 0,
+  surprise: 0,
+  intensity: 0,
+  labelMain: "",
+  labelSub: ""
+};
+
+let targetEmotion = { ...currentEmotion };
+let analyzing = false;
+let lastTime = 0;
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// 구글 비전에서 온 감정값 정리 & 필터링
+function processEmotions(raw) {
+  let joy = raw.joy ?? 0;
+  let sorrow = raw.sorrow ?? 0;
+  let anger = raw.anger ?? 0;
+  let surprise = raw.surprise ?? 0;
+
+  // 혹시 0~3 같은 값이면 스케일링
+  const maxRaw = Math.max(joy, sorrow, anger, surprise, 1);
+  if (maxRaw > 1.0) {
+    joy /= maxRaw;
+    sorrow /= maxRaw;
+    anger /= maxRaw;
+    surprise /= maxRaw;
+  }
+
+  // 가장 큰 값 기준으로 너무 작은 감정은 아예 버려서
+  // "joy 1.0 surprise 1.0" 같은 극단적 동시값만 남기고
+  // 애매한 노이즈는 삭제
+  const arr = [
+    { key: "joy", kor: "기쁨", value: joy },
+    { key: "sorrow", kor: "슬픔", value: sorrow },
+    { key: "anger", kor: "분노", value: anger },
+    { key: "surprise", kor: "놀람", value: surprise }
+  ];
+  arr.sort((a, b) => b.value - a.value);
+  const maxVal = arr[0].value;
+
+  // max 기준 40% 미만은 0으로 잘라냄 (노이즈 제거)
+  const cutoff = maxVal * 0.4;
+  for (const obj of arr) {
+    if (obj.value < cutoff) obj.value = 0;
+  }
+
+  // 다시 변수로
+  joy = arr.find(e => e.key === "joy").value;
+  sorrow = arr.find(e => e.key === "sorrow").value;
+  anger = arr.find(e => e.key === "anger").value;
+  surprise = arr.find(e => e.key === "surprise").value;
+
+  const sum = joy + sorrow + anger + surprise;
+  let wJoy = 0, wSor = 0, wAng = 0, wSur = 0;
+  if (sum > 0) {
+    wJoy = joy / sum;
+    wSor = sorrow / sum;
+    wAng = anger / sum;
+    wSur = surprise / sum;
+  }
+
+  // 라벨용 텍스트 생성
+  let labelMain = "감정을 해석할 수 없습니다";
+  let labelSub = "";
+
+  if (maxVal < 0.2) {
+    labelMain = "감정이 거의 감지되지 않았습니다";
   } else {
-    positions[i3] = 0; positions[i3+1] = -1000; positions[i3+2] = 0;
+    const active = arr.filter(e => e.value > 0);
+    if (active.length === 1) {
+      const p = Math.round((active[0].value / (sum || 1)) * 100);
+      labelMain = `${active[0].kor}이(가) 우세한 표정`;
+      labelSub = `AI 추정 강도: 약 ${p}%`;
+    } else if (active.length >= 2) {
+      const a = active[0];
+      const b = active[1];
+      const p1 = Math.round((a.value / (sum || 1)) * 100);
+      const p2 = Math.round((b.value / (sum || 1)) * 100);
+      labelMain = `${a.kor}과(와) ${b.kor}이(가 섞인 표정`;
+      labelSub = `${a.kor} 약 ${p1}%, ${b.kor} 약 ${p2}%`;
+    }
   }
 
-  if (particlesData[idx]) {
-    particlesData[idx].life = 0;
-    particlesData[idx].vx = 0; particlesData[idx].vy = 0; particlesData[idx].vz = 0;
-  }
+  return {
+    joy: wJoy,
+    sorrow: wSor,
+    anger: wAng,
+    surprise: wSur,
+    intensity: maxVal, // 가장 강한 감정의 세기
+    labelMain,
+    labelSub
+  };
 }
 
-function updateAura(data) {
+// 서버에서 받은 감정값 → 타겟 상태 업데이트
+function updateEmotionViz(data) {
   if (!data.emotions) return;
-  currentEmotions = data.emotions;
-  isActive = true;
-  targetOpacity = 1.0; 
-  targetSpeed = 1.0;
+  targetEmotion = processEmotions(data.emotions);
+
+  // 감정이 강할수록 더 또렷하게 보이도록
 }
 
+// 분석 중 상태
 function setAnalyzingState(isAnalyzing) {
-  if (isAnalyzing) {
-    targetOpacity = 0.5;
-    targetSpeed = 3.0; 
-  }
+  analyzing = isAnalyzing;
 }
 
+// 카메라 화면에서 뒤에 깔리는 잔잔한 상태
 function setBackgroundState() {
-  targetOpacity = 0.3; 
-  targetSpeed = 0.5; 
+  // 감정은 유지하되 강도만 살짝 줄임
+  targetEmotion.intensity *= 0.5;
 }
 
-function resetAura(fully) {
+// 리셋
+function resetEmotion(fully) {
   if (fully) {
-    isActive = false;
-    targetOpacity = 0.0;
-    targetSpeed = 1.0;
+    targetEmotion = {
+      joy: 0,
+      sorrow: 0,
+      anger: 0,
+      surprise: 0,
+      intensity: 0,
+      labelMain: "",
+      labelSub: ""
+    };
+  } else {
+    targetEmotion.intensity *= 0.3;
   }
 }
 
-function animate() {
-  requestAnimationFrame(animate);
+// 메인 그리기 루프
+function drawEmotionCompass(delta) {
+  const t = Math.min(delta * 0.005, 0.2); // 보간 속도
 
-  const positions = points.geometry.attributes.position.array;
-  const colors = points.geometry.attributes.color.array;
-  const { joy, sorrow, anger, surprise } = currentEmotions;
-  
-  time += 0.008; 
-  points.material.opacity += (targetOpacity - points.material.opacity) * 0.05;
+  // 현재 상태를 타겟에 맞춰 부드럽게 보간
+  currentEmotion.joy = lerp(currentEmotion.joy, targetEmotion.joy, t);
+  currentEmotion.sorrow = lerp(currentEmotion.sorrow, targetEmotion.sorrow, t);
+  currentEmotion.anger = lerp(currentEmotion.anger, targetEmotion.anger, t);
+  currentEmotion.surprise = lerp(currentEmotion.surprise, targetEmotion.surprise, t);
+  currentEmotion.intensity = lerp(currentEmotion.intensity, targetEmotion.intensity, t);
+  currentEmotion.labelMain = targetEmotion.labelMain;
+  currentEmotion.labelSub = targetEmotion.labelSub;
 
-  let tr=0.5, tg=0.5, tb=0.8; 
-  let upwardForce = 0.3;      
-  let turbulence = 0.5;       
-  let spread = 1.0;           
+  const w = canvasWidth;
+  const h = canvasHeight;
+  if (w === 0 || h === 0) return;
 
-  if (isActive) {
-    if (joy > 0.1) { tr=1.0; tg=0.9; tb=0.2; upwardForce = 1.0 + joy; turbulence = 1.0; spread = 2.0; }
-    if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; upwardForce = 0.5; turbulence = 4.0; spread = 3.0; }
-    if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=0.9; upwardForce = 0.1; turbulence = 0.2; spread = 0.5; }
-    if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; upwardForce = 1.5; spread = 4.0; }
-  }
+  // 배경 살짝 어둡게
+  ectx.clearRect(0, 0, w, h);
+  ectx.fillStyle = "rgba(0,0,0,0.8)";
+  ectx.fillRect(0, 0, w, h);
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    if (points.material.opacity < 0.01) continue;
+  const cx = w / 2;
+  const cy = h * 0.45;
+  const baseRadius = Math.min(w, h) * 0.07;
+  const extraRadius = Math.min(w, h) * 0.12 * (0.3 + currentEmotion.intensity);
 
-    const p = particlesData[i];
-    const idx = i * 3;
+  // 전체 "호흡" 애니메이션
+  const time = performance.now() * 0.001;
+  const breath = Math.sin(time * 1.0) * 0.05;
 
-    p.life += 0.01 * targetSpeed;
-    if (p.life > p.maxLife) { resetParticle(i, positions); }
+  // 분석 중일 때는 살짝 회전
+  const baseRotation = analyzing ? time * 1.2 : 0;
 
-    let cx = positions[idx];
-    let cy = positions[idx+1];
+  // 각 감정 방향(라디안)
+  const angles = {
+    joy: -Math.PI / 2,
+    anger: 0,
+    sorrow: Math.PI / 2,
+    surprise: Math.PI
+  };
 
-    const noiseScale = 0.008;
-    const nX = noise.simplex3(cx * noiseScale, cy * noiseScale, time + p.seed);
-    const nY = noise.simplex3(cx * noiseScale, cy * noiseScale + 100, time + p.seed);
-    
-    p.vx += nX * turbulence * 0.05;
-    p.vy += upwardForce * 0.05; 
-    p.vx += (cx * 0.001) * spread; 
+  // 각 감정별 색
+  const colors = {
+    joy: "#ffd86b",
+    sorrow: "#6fa8ff",
+    anger: "#ff5a5a",
+    surprise: "#ffffff"
+  };
 
-    p.vx *= 0.95; p.vy *= 0.95; p.vz *= 0.95;
+  // 각 감정 끝점 위치 계산
+  const ends = {};
 
-    positions[idx] += p.vx * targetSpeed;
-    positions[idx+1] += p.vy * targetSpeed;
-    positions[idx+2] += p.vz * targetSpeed;
+  ["joy", "anger", "sorrow", "surprise"].forEach(key => {
+    const ang = angles[key] + baseRotation;
+    const wVal = currentEmotion[key];
+    const r = baseRadius + extraRadius * wVal * (1 + breath);
+    const ex = cx + Math.cos(ang) * r;
+    const ey = cy + Math.sin(ang) * r;
 
-    const opacity = Math.sin(p.life / p.maxLife * Math.PI); 
-    
-    colors[idx] += (tr - colors[idx]) * 0.05;
-    colors[idx+1] += (tg - colors[idx+1]) * 0.05;
-    colors[idx+2] += (tb - colors[idx+2]) * 0.05;
+    ends[key] = { x: ex, y: ey, weight: wVal };
+  });
 
-    colors[idx] = Math.max(0, colors[idx] * opacity);
-    colors[idx+1] = Math.max(0, colors[idx+1] * opacity);
-    colors[idx+2] = Math.max(0, colors[idx+2] * opacity);
-  }
+  // 중심에 옅은 원 (전체 감정의 "용기")
+  const auraR = baseRadius + extraRadius * currentEmotion.intensity * 0.4;
+  const grd = ectx.createRadialGradient(cx, cy, auraR * 0.1, cx, cy, auraR);
+  grd.addColorStop(0, "rgba(255,255,255,0.25)");
+  grd.addColorStop(1, "rgba(255,255,255,0.0)");
+  ectx.fillStyle = grd;
+  ectx.beginPath();
+  ectx.arc(cx, cy, auraR, 0, Math.PI * 2);
+  ectx.fill();
 
-  points.geometry.attributes.position.needsUpdate = true;
-  points.geometry.attributes.color.needsUpdate = true;
-  renderer.render(scene, camera);
+  // 감정 "꽃잎" (각 감정 방향으로 뻗은 형태)
+  ["joy", "anger", "sorrow", "surprise"].forEach(key => {
+    const end = ends[key];
+    if (end.weight <= 0.001) return; // 감정이 거의 없으면 그리지 않음
+
+    const ang = angles[key] + baseRotation;
+    const midAng1 = ang - 0.25;
+    const midAng2 = ang + 0.25;
+    const rInner = baseRadius * 0.4;
+    const rOuter = baseRadius + extraRadius * end.weight;
+
+    const x1 = cx + Math.cos(midAng1) * rInner;
+    const y1 = cy + Math.sin(midAng1) * rInner;
+    const x2 = cx + Math.cos(midAng1) * rOuter;
+    const y2 = cy + Math.sin(midAng1) * rOuter;
+    const x3 = cx + Math.cos(midAng2) * rOuter;
+    const y3 = cy + Math.sin(midAng2) * rOuter;
+    const x4 = cx + Math.cos(midAng2) * rInner;
+    const y4 = cy + Math.sin(midAng2) * rInner;
+
+    ectx.beginPath();
+    ectx.moveTo(x1, y1);
+    ectx.quadraticCurveTo(cx, cy, x2, y2);
+    ectx.lineTo(x3, y3);
+    ectx.quadraticCurveTo(cx, cy, x4, y4);
+    ectx.closePath();
+
+    const alpha = 0.3 + end.weight * 0.6;
+    ectx.fillStyle = hexToRgba(colors[key], alpha);
+    ectx.fill();
+  });
+
+  // 중심 원
+  ectx.beginPath();
+  ectx.arc(cx, cy, baseRadius * 0.4, 0, Math.PI * 2);
+  ectx.fillStyle = "rgba(0,0,0,0.8)";
+  ectx.fill();
+  ectx.lineWidth = 1;
+  ectx.strokeStyle = "rgba(255,255,255,0.4)";
+  ectx.stroke();
+
+  // 중심 십자선
+  ectx.strokeStyle = "rgba(255,255,255,0.1)";
+  ectx.beginPath();
+  ectx.moveTo(cx - baseRadius * 1.1, cy);
+  ectx.lineTo(cx + baseRadius * 1.1, cy);
+  ectx.stroke();
+  ectx.beginPath();
+  ectx.moveTo(cx, cy - baseRadius * 1.1);
+  ectx.lineTo(cx, cy + baseRadius * 1.1);
+  ectx.stroke();
+
+  // 각 감정 라벨 (네 귀퉁이)
+  ectx.font = "12px Pretendard, system-ui, sans-serif";
+  ectx.textAlign = "center";
+  ectx.textBaseline = "middle";
+
+  drawEmotionLabel(cx, cy - auraR * 1.2, "기쁨", currentEmotion.joy, colors.joy);
+  drawEmotionLabel(cx + auraR * 1.4, cy, "분노", currentEmotion.anger, colors.anger);
+  drawEmotionLabel(cx, cy + auraR * 1.2, "슬픔", currentEmotion.sorrow, colors.sorrow);
+  drawEmotionLabel(cx - auraR * 1.4, cy, "놀람", currentEmotion.surprise, colors.surprise);
+
+  // 하단 텍스트 박스
+  drawBottomTextBox();
 }
 
-initThree();
-animate();
+function drawEmotionLabel(x, y, text, weight, color) {
+  const alpha = 0.25 + weight * 0.6;
+  ectx.fillStyle = hexToRgba(color, alpha);
+  ectx.beginPath();
+  ectx.arc(x, y, 8 + weight * 12, 0, Math.PI * 2);
+  ectx.fill();
 
+  ectx.fillStyle = "rgba(255,255,255,0.85)";
+  ectx.font = "11px Pretendard, system-ui, sans-serif";
+  ectx.textAlign = "center";
+  ectx.textBaseline = "middle";
+  ectx.fillText(text, x, y - 16);
+}
+
+function drawBottomTextBox() {
+  const w = canvasWidth;
+  const h = canvasHeight;
+  const boxWidth = Math.min(420, w * 0.8);
+  const boxHeight = 70;
+  const x = (w - boxWidth) / 2;
+  const y = h * 0.75;
+
+  // 바탕
+  ectx.fillStyle = "rgba(0,0,0,0.65)";
+  ectx.beginPath();
+  const r = 12;
+  roundedRect(ectx, x, y, boxWidth, boxHeight, r);
+  ectx.fill();
+
+  // 테두리
+  ectx.strokeStyle = "rgba(255,255,255,0.25)";
+  ectx.lineWidth = 1;
+  ectx.stroke();
+
+  // 텍스트
+  ectx.fillStyle = "rgba(255,255,255,0.9)";
+  ectx.textAlign = "center";
+  ectx.textBaseline = "middle";
+
+  ectx.font = "14px Pretendard, system-ui, sans-serif";
+  const main = currentEmotion.labelMain || "아직 감정을 읽는 중입니다";
+  ectx.fillText(main, x + boxWidth / 2, y + boxHeight / 2 - 10);
+
+  ectx.font = "11px Pretendard, system-ui, sans-serif";
+  const sub = currentEmotion.labelSub || "카메라를 응시하고 자연스러운 표정을 지어보세요.";
+  ectx.fillStyle = "rgba(255,255,255,0.7)";
+  ectx.fillText(sub, x + boxWidth / 2, y + boxHeight / 2 + 14);
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function hexToRgba(hex, alpha) {
+  const c = hex.replace("#", "");
+  const num = parseInt(c, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// 애니메이션 루프 시작
+function emotionLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const delta = timestamp - lastTime;
+  lastTime = timestamp;
+
+  drawEmotionCompass(delta);
+  requestAnimationFrame(emotionLoop);
+}
+requestAnimationFrame(emotionLoop);
 </script>
 </body>
 </html>
+
