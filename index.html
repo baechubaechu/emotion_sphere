@@ -221,14 +221,110 @@ function initThree() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.getElementById("container").appendChild(renderer.domElement);
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/josephg/noisejs/perlin.js"></script>
+
+<script>
+// [서버 주소]
+const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
+
+/* ================= 1. 화면 전환 및 카메라 로직 ================= */
+const cameraScreen = document.getElementById("camera-screen");
+const resultUi = document.getElementById("result-ui");
+const statusText = document.getElementById("status-text");
+const snapBtn = document.getElementById("snapBtn");
+const retryBtn = document.getElementById("retryBtn");
+
+let stream = null;
+
+async function startCamera() {
+  const video = document.getElementById("cam");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+    video.srcObject = stream;
+  } catch (e) { alert("카메라 권한 필요"); }
+}
+window.addEventListener("load", startCamera);
+
+snapBtn.addEventListener("click", async () => {
+  if (!stream) { startCamera(); return; }
+
+  // 화면 전환
+  cameraScreen.classList.add("hidden"); 
+  setTimeout(() => { resultUi.style.display = "flex"; }, 500);
+
+  statusText.textContent = "에너지를 분석하고 있습니다...";
+
+  const video = document.getElementById("cam");
+  const canvas = document.getElementById("snap");
+  const ctx = canvas.getContext("2d");
+  
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+  ctx.restore();
+
+  canvas.toBlob(async blob => {
+    const form = new FormData();
+    form.append("frame", blob, "frame.jpg");
+    
+    try {
+      const res = await fetch(SERVER_URL, { method: "POST", body: form });
+      if(!res.ok) throw new Error("Server Error");
+      const data = await res.json();
+      
+      if (data.status === "ok") {
+        statusText.textContent = ""; 
+        updateAura(data);
+      } else {
+        statusText.textContent = "얼굴 인식 실패. 다시 시도해주세요.";
+      }
+    } catch (e) { 
+      console.error(e); 
+      statusText.textContent = "연결 실패"; 
+    }
+  }, "image/jpeg", 0.9);
+});
+
+retryBtn.addEventListener("click", () => {
+  resultUi.style.display = "none";
+  cameraScreen.classList.remove("hidden");
+  resetAura();
+});
+
+
+/* ================= 2. Three.js: Stable Aura Visualization ================= */
+let scene, camera, renderer, points;
+const PARTICLE_COUNT = 6000;
+let particlesData = []; 
+
+let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
+let isActive = false; // 오라 활성화 여부
+let time = 0;
+
+noise.seed(Math.random());
+
+function initThree() {
+  const container = document.getElementById("container");
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000); 
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.z = 300; 
+
+  renderer = new THREE.WebGLRenderer({ alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
   const posArray = new Float32Array(PARTICLE_COUNT * 3);
   const colorArray = new Float32Array(PARTICLE_COUNT * 3);
 
   for(let i=0; i<PARTICLE_COUNT; i++) {
-    // 초기엔 화면 밖(아래)에 숨겨둠
-    const x = (Math.random() - 0.5) * window.innerWidth;
-    const y = -window.innerHeight; // 화면 아래
-    const z = (Math.random() - 0.5) * 200;
+    // 초기 위치: 화면 중앙 하단
+    const x = (Math.random() - 0.5) * 50;
+    const y = -100; 
+    const z = (Math.random() - 0.5) * 50;
     
     posArray[i*3] = x;
     posArray[i*3+1] = y;
@@ -237,11 +333,14 @@ function initThree() {
     particlesData.push({
       vx: 0, vy: 0, vz: 0,
       life: Math.random(),
-      maxLife: 0.5 + Math.random() * 0.5,
+      maxLife: 0.5 + Math.random() * 0.8,
       seed: Math.random() * 100
     });
 
-    colorArray[i*3] = 0; colorArray[i*3+1] = 0; colorArray[i*3+2] = 0; // 처음엔 어둡게
+    // [수정] 초기 색상을 밝게 설정 (안 보임 방지)
+    colorArray[i*3] = 1.0; 
+    colorArray[i*3+1] = 1.0; 
+    colorArray[i*3+2] = 1.0;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -268,22 +367,20 @@ function initThree() {
   });
 }
 
-// 입자 리셋 (재활용)
+// 입자 재생성 (화면 중앙 하단에서 솟아오름)
 function resetParticle(idx, positions) {
   const i3 = idx * 3;
   let x, y, z;
 
-  if (hasFace) {
-    // 얼굴이 있을 땐 중심에서 뿜어져 나옴
-    const spread = 40;
-    x = faceCenter.x + (Math.random() - 0.5) * spread;
-    y = faceCenter.y + (Math.random() - 0.5) * spread;
-    z = faceCenter.z + (Math.random() - 0.5) * spread;
+  if (isActive) {
+    // 활성화 시: 중앙 하단 집중 생성
+    const spread = 20; 
+    x = (Math.random() - 0.5) * spread;
+    y = -80 + (Math.random() - 0.5) * spread; // 화면 중앙보다 약간 아래
+    z = (Math.random() - 0.5) * spread;
   } else {
-    // 얼굴 없을 땐(대기모드) 화면 아래로 보냄
-    x = (Math.random() - 0.5) * window.innerWidth;
-    y = -window.innerHeight; 
-    z = 0;
+    // 비활성 시: 화면 밖으로 보냄
+    x = 0; y = -1000; z = 0;
   }
   
   positions[i3] = x;
@@ -298,30 +395,17 @@ function resetParticle(idx, positions) {
   }
 }
 
-// 데이터 수신
 function updateAura(data) {
-  if (!data.landmarks || !data.face_rect) return;
-  hasFace = true;
+  if (!data.emotions) return;
+  isActive = true;
   currentEmotions = data.emotions;
   
-  // 입자들이 보이도록 설정
-  points.material.opacity = 0.6;
-
-  const rect = data.face_rect;
-  const centerX = (rect.min_x + rect.max_x) / 2;
-  const centerY = (rect.min_y + rect.max_y) / 2;
-  
-  faceCenter.set(
-    (centerX - 320) * 1.5,
-    -(centerY - 240) * 1.5 + 50, 
-    0
-  );
+  // 입자 보이기 시작
+  points.material.opacity = 0.8; 
 }
 
-// 다시하기 눌렀을 때 초기화
 function resetAura() {
-  hasFace = false;
-  // 입자를 투명하게 숨김
+  isActive = false;
   points.material.opacity = 0; 
 }
 
@@ -332,43 +416,48 @@ function animate() {
   const colors = points.geometry.attributes.color.array;
   const { joy, sorrow, anger, surprise } = currentEmotions;
   
-  time += 0.005; 
+  time += 0.008; 
 
   // 감정별 파라미터
-  let tr=0.2, tg=0.3, tb=0.4; 
-  let upwardForce = 0.2;      
-  let turbulence = 0.5;      
-  let speedMult = 1.0;        
+  let tr=0.5, tg=0.5, tb=0.8; // 기본: 신비로운 블루
+  let upwardForce = 0.3;      // 상승력
+  let turbulence = 0.5;       // 흔들림
+  let spread = 1.0;           // 퍼짐 정도
 
-  if (hasFace) {
+  if (isActive) {
     if (joy > 0.1) { 
-      tr=1.0; tg=0.9; tb=0.3; // Gold
-      upwardForce = 0.8 + joy; 
+      tr=1.0; tg=0.9; tb=0.2; // Gold
+      upwardForce = 1.0 + joy; 
       turbulence = 1.0;
-      speedMult = 1.5;
+      spread = 2.0;
     }
     if (anger > 0.1) { 
       tr=1.0; tg=0.1; tb=0.1; // Red
-      upwardForce = 0.3;
-      turbulence = 3.0 + anger * 2; 
-      speedMult = 2.0;
+      upwardForce = 0.5;
+      turbulence = 4.0; 
+      spread = 3.0;
     }
     if (sorrow > 0.1) { 
-      tr=0.1; tg=0.2; tb=0.8; // Blue
-      upwardForce = 0.05; 
+      tr=0.1; tg=0.3; tb=0.9; // Deep Blue
+      upwardForce = 0.1; 
       turbulence = 0.2;   
-      speedMult = 0.5;
+      spread = 0.5;
+    }
+    if (surprise > 0.1) {
+      tr=1.0; tg=1.0; tb=1.0; // White
+      upwardForce = 1.5;
+      spread = 4.0;
     }
   }
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
-    // hasFace가 false면 업데이트 최소화 (성능 절약)
-    if (!hasFace && points.material.opacity < 0.01) continue;
+    // 비활성 상태면 연산 건너뜀
+    if (!isActive && points.material.opacity < 0.01) continue;
 
     const p = particlesData[i];
     const idx = i * 3;
 
-    p.life += 0.005 * speedMult;
+    p.life += 0.01;
     if (p.life > p.maxLife) {
       resetParticle(i, positions);
     }
@@ -377,32 +466,38 @@ function animate() {
     let cy = positions[idx+1];
     let cz = positions[idx+2];
 
-    const noiseScale = 0.005;
+    // 유체 흐름 (Perlin Noise)
+    const noiseScale = 0.008;
     const nX = noise.simplex3(cx * noiseScale, cy * noiseScale, time + p.seed);
     const nY = noise.simplex3(cx * noiseScale, cy * noiseScale + 100, time + p.seed);
-    const nZ = noise.simplex3(cx * noiseScale, cy * noiseScale + 200, time + p.seed);
-
+    
+    // 움직임 적용
     p.vx += nX * turbulence * 0.05;
-    p.vy += nY * turbulence * 0.05;
-    p.vz += nZ * turbulence * 0.05;
-    p.vy += upwardForce * 0.05;
+    p.vy += upwardForce * 0.05; // 위로 상승
+    p.vx += (cx * 0.001) * spread; // 좌우로 퍼짐
 
-    p.vx *= 0.96; p.vy *= 0.96; p.vz *= 0.96;
+    // 마찰
+    p.vx *= 0.95; p.vy *= 0.95; p.vz *= 0.95;
 
-    positions[idx] += p.vx * speedMult;
-    positions[idx+1] += p.vy * speedMult;
-    positions[idx+2] += p.vz * speedMult;
+    positions[idx] += p.vx;
+    positions[idx+1] += p.vy;
+    positions[idx+2] += p.vz;
 
+    // 투명도 (생겨났다 사라짐)
     const opacity = Math.sin(p.life / p.maxLife * Math.PI); 
     
+    // 색상 적용 (감정색 + 투명도)
     colors[idx] += (tr - colors[idx]) * 0.05;
     colors[idx+1] += (tg - colors[idx+1]) * 0.05;
     colors[idx+2] += (tb - colors[idx+2]) * 0.05;
 
-    // 최종 색상에 투명도 반영
-    colors[idx] *= opacity;
-    colors[idx+1] *= opacity;
-    colors[idx+2] *= opacity;
+    // 쉐이더 없이 색상값 자체를 어둡게 해서 투명도 흉내
+    // (Three.js PointsMaterial 특성상 이게 안정적)
+    // 실제 화면에 그려질 색 = 색상 * 투명도
+    // 근데 vertexColors를 쓰면 alpha를 따로 제어하기 힘드니 검은색 배경을 이용
+    colors[idx] = Math.max(0, colors[idx]);
+    colors[idx+1] = Math.max(0, colors[idx+1]);
+    colors[idx+2] = Math.max(0, colors[idx+2]);
   }
 
   points.geometry.attributes.position.needsUpdate = true;
@@ -416,3 +511,4 @@ animate();
 </script>
 </body>
 </html>
+
