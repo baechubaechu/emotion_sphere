@@ -19,8 +19,8 @@
       z-index: 10;
       pointer-events: none; /* 배경 터치 통과 */
     }
-    .screen.hidden { opacity: 0; pointer-events: none; }
-    .screen.active { opacity: 1; pointer-events: auto; }
+    .screen.hidden { opacity: 0; pointer-events: none; display: none; } /* display: none 추가 */
+    .screen.active { opacity: 1; pointer-events: auto; display: flex; }
 
     /* 버튼 스타일 */
     button {
@@ -39,7 +39,7 @@
 
 
     /* 1. 대기 화면 (Start Screen) */
-    #start-screen { z-index: 30; background: #000; } /* 완전 불투명 검정 */
+    #start-screen { z-index: 30; background: #000; } 
     #startBtn {
       border: none; background: transparent;
       font-size: 24px; letter-spacing: 5px;
@@ -51,12 +51,12 @@
     /* 2. 카메라 화면 (Camera Screen) */
     #camera-screen {
       justify-content: flex-end; padding-bottom: 60px;
-      /* 배경을 투명하게 해서 뒤에 오라가 보이게 함 */
+      background: rgba(0,0,0,0.3); /* 배경 살짝 어둡게 */
     }
 
     #camera-frame {
       position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -60%); /* 중앙보다 살짝 위 */
+      transform: translate(-50%, -60%);
       width: 300px; height: 300px; /* 네모난 모양 */
       border: 1px solid rgba(255, 255, 255, 0.3);
       background: #000;
@@ -68,7 +68,7 @@
       width: 100%; height: 100%;
       object-fit: cover;
       transform: scaleX(-1); /* 거울모드 */
-      opacity: 0.8;
+      opacity: 0.9;
     }
 
     /* 얼굴 가이드 (네모 안의 타원) */
@@ -78,11 +78,12 @@
       width: 60%; height: 70%;
       border: 2px dashed rgba(255, 255, 255, 0.5);
       border-radius: 50%;
-      box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5); /* 가이드 밖 어둡게 */
+      box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5); 
     }
 
     #scanBtn {
       margin-top: 20px; font-weight: bold; background: #fff; color: #000; border: none;
+      z-index: 50; /* 버튼이 확실히 위에 오도록 */
     }
 
 
@@ -91,12 +92,11 @@
       justify-content: flex-end; padding-bottom: 60px;
     }
     #info-text {
-      position: absolute; top: 10%; width: 100%;
-      text-align: center; color: rgba(255,255,255,0.6);
-      font-size: 14px; letter-spacing: 1px;
+      position: absolute; top: 15%; width: 100%;
+      text-align: center; color: rgba(255,255,255,0.7);
+      font-size: 16px; letter-spacing: 1px;
     }
 
-    /* 숨김 캔버스 */
     #snap { display: none; }
   </style>
 </head>
@@ -117,7 +117,7 @@
 </div>
 
 <div id="retry-screen" class="screen hidden">
-  <div id="info-text">당신의 감정 에너지가 형상화됩니다.</div>
+  <div id="info-text">데이터를 해석하고 있습니다...</div>
   <button id="retryBtn">↺ RE-SCAN</button>
 </div>
 
@@ -143,49 +143,78 @@ const infoText = document.getElementById("info-text");
 const videoElement = document.getElementById("cam");
 let stream = null;
 let idleTimer = null;
-const IDLE_LIMIT = 60000; // 1분 (60초)
+const IDLE_LIMIT = 60000; // 1분
 
-// 1. 초기화 (대기 화면)
-function initSequence() {
-  showScreen(startScreen);
-  resetAura(true); // 오라 완전 끄기
-  stopIdleTimer(); // 대기 화면에선 타이머 필요 없음
-}
-
-// 2. 시작하기 (카메라 켜기)
-async function startExperience() {
+// [중요] 1. 접속하자마자 카메라 권한 요청 및 시작
+async function initCamera() {
   try {
-    if (!stream) {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      videoElement.srcObject = stream;
-    }
-    videoElement.play();
-    
-    showScreen(cameraScreen);
-    resetTimer(); // 타이머 시작
+    console.log("Requesting Camera...");
+    stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: "user", width: 640, height: 480 } 
+    });
+    videoElement.srcObject = stream;
+    await videoElement.play();
+    console.log("Camera started in background.");
   } catch (e) {
-    alert("카메라 권한을 허용해주세요.");
+    console.warn("Autoplay blocked or permission denied. Waiting for user gesture.", e);
+    // 여기서 실패해도 괜찮음. startBtn 누를 때 다시 시도함.
   }
 }
 
-// 3. 스캔하기 (분석 및 결과)
-async function scanFace() {
-  resetTimer(); // 타이머 리셋
-  
-  // UI 전환: 카메라 숨김 -> 결과 화면(이지만 버튼은 아직 안뜸)
-  showScreen(null); // 일단 다 숨기고 오라만 감상
-  infoText.textContent = "에너지를 해석하고 있습니다...";
-  retryScreen.classList.remove("hidden"); // 텍스트 보여주기 위해 켬 (버튼은 나중에)
-  retryBtn.style.display = "none"; // 버튼은 잠시 숨김
+// 페이지 로드 시 즉시 실행
+window.addEventListener("load", initCamera);
 
-  // 분석 효과 (오라가 막 요동침)
+
+// 2. [TOUCH TO START] 누르면 카메라 화면으로 전환
+startBtn.addEventListener("click", async () => {
+  // 혹시 로드 시점에 카메라가 안 켜졌으면 지금 다시 켬 (User Gesture)
+  if (!stream) {
+    await initCamera(); 
+  }
+  
+  // 화면 전환
+  showScreen(cameraScreen);
+  
+  // 타이머 시작
+  resetIdleTimer();
+});
+
+
+// 3. [SCAN] 버튼 클릭 (핵심 로직 수정)
+scanBtn.addEventListener("click", async () => {
+  console.log("Scan button clicked");
+
+  // 혹시라도 스트림이 없으면 다시 시도
+  if (!stream) {
+    await initCamera();
+    if(!stream) {
+        alert("카메라 오류. 새로고침 해주세요.");
+        return;
+    }
+  }
+
+  // 타이머 리셋
+  resetIdleTimer();
+
+  // UI 전환: 카메라 숨기고 결과 화면 준비
+  showScreen(null); // 다 숨기고 배경만 보이게
+  retryScreen.classList.remove("hidden"); 
+  retryScreen.classList.add("active");
+  retryBtn.style.display = "none"; // 버튼은 잠시 숨김
+  infoText.textContent = "에너지를 해석하고 있습니다...";
+  
+  // 분석 효과 (오라 요동침)
   setAnalyzingState(true);
 
-  // 캡쳐
+  // 캡쳐 및 전송
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
+  
+  // 캔버스 크기를 비디오 실제 크기에 맞춤
+  if (videoElement.videoWidth > 0) {
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+  }
   
   ctx.save();
   ctx.scale(-1, 1);
@@ -197,46 +226,54 @@ async function scanFace() {
     form.append("frame", blob, "frame.jpg");
     
     try {
+      console.log("Sending to server...");
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Server Error");
       const data = await res.json();
+      console.log("Data received:", data);
       
       if (data.status === "ok") {
         infoText.textContent = ""; 
-        updateAura(data); // 결과 시각화
+        updateAura(data); // 오라 시각화
       } else {
-        infoText.textContent = "인식이 어렵습니다. 다시 시도해주세요.";
+        infoText.textContent = "인식된 얼굴이 없습니다.";
       }
     } catch (e) { 
       console.error(e); 
       infoText.textContent = "서버 연결 실패"; 
     } finally {
-      // 분석 완료 후 처리
+      // 분석 완료
       setAnalyzingState(false);
+      
+      // 2초 뒤 다시하기 버튼 등장
       setTimeout(() => {
-        retryBtn.style.display = "block"; // 2초 뒤에 다시하기 버튼 등장
-        showScreen(retryScreen);
+        retryBtn.style.display = "block"; 
       }, 2000);
     }
   }, "image/jpeg", 0.9);
-}
+});
 
-// 4. 다시하기 (오라 남기고 카메라 띄우기)
-function retryExperience() {
-  resetTimer();
+
+// 4. [RE-SCAN] 다시하기
+retryBtn.addEventListener("click", () => {
+  resetIdleTimer();
   showScreen(cameraScreen);
-  setBackgroundState(); // 오라를 배경으로 깔기
+  setBackgroundState(); // 오라를 배경으로
   
-  // 비디오가 멈췄을 수 있으니 다시 재생
-  videoElement.play().catch(e => console.log(e));
-}
+  // 비디오가 멈췄을 수 있으니 확인
+  if (videoElement.paused) videoElement.play();
+});
 
-// 5. 자동 초기화 (1분간 입력 없으면)
-function resetTimer() {
+
+// 5. 자동 초기화 (타이머)
+function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    console.log("Timeout Reset");
-    initSequence(); // 처음으로 강제 복귀
+    console.log("Timeout -> Reset to Start Screen");
+    // 초기화 로직
+    showScreen(startScreen);
+    resetAura(true); // 오라 끄기
+    stopIdleTimer();
   }, IDLE_LIMIT);
 }
 
@@ -245,7 +282,7 @@ function stopIdleTimer() {
   idleTimer = null;
 }
 
-// 유틸: 화면 전환 함수
+// 화면 전환 유틸
 function showScreen(target) {
   [startScreen, cameraScreen, retryScreen].forEach(s => {
     s.classList.remove("active");
@@ -257,14 +294,9 @@ function showScreen(target) {
   }
 }
 
-// === 이벤트 리스너 ===
-startBtn.addEventListener("click", startExperience);
-scanBtn.addEventListener("click", scanFace);
-retryBtn.addEventListener("click", retryExperience);
-
-// 아무대나 터치하면 타이머 연장 (대기화면 제외)
-window.addEventListener("touchstart", () => { if(!startScreen.classList.contains("active")) resetTimer(); });
-window.addEventListener("click", () => { if(!startScreen.classList.contains("active")) resetTimer(); });
+// 인터랙션 감지 (타이머 연장)
+window.addEventListener("touchstart", () => { if(!startScreen.classList.contains("active")) resetIdleTimer(); });
+window.addEventListener("click", () => { if(!startScreen.classList.contains("active")) resetIdleTimer(); });
 
 
 /* ================= [2] Three.js 시각화 로직 ================= */
@@ -344,7 +376,6 @@ function initThree() {
 
 function resetParticle(idx, positions) {
   const i3 = idx * 3;
-  // 오라가 켜져있거나 배경모드일 때만 생성
   if (targetOpacity > 0.1) { 
     const spread = 20; 
     positions[i3] = (Math.random() - 0.5) * spread;
@@ -360,30 +391,26 @@ function resetParticle(idx, positions) {
   }
 }
 
-// 오라 업데이트 (결과)
 function updateAura(data) {
   if (!data.emotions) return;
   currentEmotions = data.emotions;
   isActive = true;
-  targetOpacity = 1.0; // 선명하게
+  targetOpacity = 1.0; 
   targetSpeed = 1.0;
 }
 
-// 분석 중 효과
 function setAnalyzingState(isAnalyzing) {
   if (isAnalyzing) {
     targetOpacity = 0.5;
-    targetSpeed = 3.0; // 매우 빠르게
+    targetSpeed = 3.0; 
   }
 }
 
-// 배경 모드 (다시하기 시)
 function setBackgroundState() {
-  targetOpacity = 0.3; // 흐리게
-  targetSpeed = 0.5;   // 천천히
+  targetOpacity = 0.3; 
+  targetSpeed = 0.5; 
 }
 
-// 초기화 (대기화면 갈 때)
 function resetAura(fully) {
   if (fully) {
     isActive = false;
@@ -400,7 +427,6 @@ function animate() {
   const { joy, sorrow, anger, surprise } = currentEmotions;
   
   time += 0.008; 
-  // 투명도 부드러운 전환
   points.material.opacity += (targetOpacity - points.material.opacity) * 0.05;
 
   let tr=0.5, tg=0.5, tb=0.8; 
@@ -457,8 +483,8 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// 최초 실행
 initThree();
+animate();
 
 </script>
 </body>
