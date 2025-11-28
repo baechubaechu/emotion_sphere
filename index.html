@@ -3,171 +3,166 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Emotion Sphere (Google Vision)</title>
+  <title>AI Emotion Sphere</title>
   <style>
-    /* ================= 기본 스타일 ================= */
+    /* ================= 레이아웃 & 스타일 ================= */
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden; /* 스크롤 방지 */
-      background: #000;
+      width: 100%;
       height: 100%;
+      background: #000;
       font-family: sans-serif;
-      /* 드래그 및 선택 방지 (키오스크 모드용) */
-      user-select: none;
-      -webkit-user-select: none;
+      overflow: hidden; /* 스크롤 방지 */
+      user-select: none; /* 텍스트 선택 방지 */
     }
+
+    /* 1. Three.js 배경 (가장 뒤) */
     #container {
-      width: 100vw;
-      height: 100vh;
       position: absolute;
       top: 0;
       left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
     }
 
-    /* ================= 상단 UI (정보 및 제어) ================= */
-    #ui {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      z-index: 100; /* Three.js 보다 위에 */
-      color: #fff;
-      font-size: 14px;
-      width: 300px;
-      line-height: 1.6;
-      background: rgba(0, 0, 0, 0.5); /* 배경 반투명 */
-      padding: 15px;
-      border-radius: 12px;
-      backdrop-filter: blur(5px); /* 블러 효과 */
-    }
-    /* 상단 작은 버튼들 */
-    .control-btn {
-      padding: 8px 12px;
-      margin-right: 8px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.2);
-      color: #fff;
-      font-size: 12px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    .control-btn:hover, .control-btn:active {
-      background: rgba(255, 255, 255, 0.4);
-    }
-    #info {
-      white-space: pre-wrap; /* 줄바꿈 보존 */
-    }
-
-    /* ================= 우측 하단 카메라 섹션 ================= */
-    #camera-section {
-      position: fixed;
-      bottom: 30px;
-      right: 30px;
-      z-index: 110;
+    /* 2. UI 레이어 (화면 전체를 덮는 투명한 박스) */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none; /* 배경의 구를 가리지 않게 터치 통과 */
+      
       display: flex;
       flex-direction: column;
-      align-items: flex-end; /* 오른쪽 정렬 */
-      gap: 15px; /* 버튼과 카메라 사이 간격 */
+      justify-content: flex-end; /* 내용물을 맨 아래로 */
+      align-items: center;       /* 좌우 중앙 정렬 */
+      padding-bottom: 30px;      /* 바닥에서 조금 띄움 */
+      box-sizing: border-box;
     }
 
-    /* 1) 크고 아름다운 촬영 버튼 */
-    #snapBtn {
-      padding: 20px 40px; /* 크기 대폭 확대 */
-      border-radius: 50px; /* 둥근 알약 모양 */
-      border: none;
-      background: linear-gradient(135deg, #ff6b6b, #f06595); /* 눈에 띄는 그라데이션 */
-      color: #fff;
-      font-size: 24px; /* 글자 크기 확대 */
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
-      transition: transform 0.2s, box-shadow 0.2s;
-      /* 텍스트 줄바꿈 방지 */
-      white-space: nowrap;
-    }
-    #snapBtn:active {
-      transform: scale(0.95); /* 클릭 시 살짝 눌리는 효과 */
-      box-shadow: 0 2px 10px rgba(255, 107, 107, 0.4);
-      background: linear-gradient(135deg, #fa5252, #e64980);
+    /* 정보 텍스트 (상단 중앙) */
+    #info {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      pointer-events: auto;
     }
 
-    /* 2) 카메라 래퍼 (비디오 + 가이드라인) */
+    /* 카메라 래퍼 (비디오 + 가이드라인) */
     #camera-wrapper {
       position: relative;
-      width: 400px;  /* 너비 확대 */
-      height: 300px; /* 높이 확대 */
-      border-radius: 20px;
+      background: #000;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 16px;
       overflow: hidden;
-      border: 3px solid rgba(255, 255, 255, 0.5);
-      background: #222;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      margin-bottom: 20px; /* 버튼과의 간격 */
+      pointer-events: auto; /* 터치 가능 */
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      
+      /* 기본 크기 (핸드폰 기준) */
+      width: 60vw;  
+      height: 60vw; 
+      max-width: 300px;
+      max-height: 300px;
+      /* 원형에 가깝게? 아니면 사각형? -> 약간 둥근 사각형 유지 */
     }
 
-    /* 실제 비디오 화면 */
+    /* 태블릿/PC일 때 카메라 크기 키움 (미디어 쿼리) */
+    @media (min-width: 768px) {
+      #camera-wrapper {
+        width: 320px;
+        height: 240px;
+        margin-bottom: 30px;
+      }
+    }
+
     #cam {
       width: 100%;
       height: 100%;
-      object-fit: cover; /* 화면 꽉 채우기 */
-      transform: scaleX(-1); /* 거울모드 (좌우반전) */
+      object-fit: cover;
+      transform: scaleX(-1); /* 거울 모드 */
     }
 
-    /* 얼굴 가이드라인 오버레이 */
+    /* 얼굴 가이드라인 */
     #face-guide {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 45%;  /* 가이드 너비 */
-      height: 70%; /* 가이드 높이 */
-      border: 4px dashed rgba(255, 255, 255, 0.7); /* 점선 테두리 */
-      border-radius: 50% 50% 60% 60%; /* 약간 달걀형 타원 */
-      box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
-      pointer-events: none; /* 클릭 통과되도록 설정 */
+      width: 50%;
+      height: 70%;
+      border: 2px dashed rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.2); /* 주변을 약간 어둡게 */
     }
 
-    /* 캡쳐용 숨김 캔버스 */
-    #snap { display: none; }
+    /* 캡쳐 버튼 (맨 아래) */
+    #snapBtn {
+      pointer-events: auto;
+      width: 80%;
+      max-width: 400px;
+      padding: 18px 0;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(135deg, #00d2ff, #3a7bd5); /* Cyan Blue 계열 */
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+      transition: transform 0.2s, background 0.3s;
+    }
+    #snapBtn:active {
+      transform: scale(0.96);
+      background: linear-gradient(135deg, #00a8cc, #285a9e);
+    }
+    #snapBtn:disabled {
+      background: #555;
+      color: #aaa;
+      cursor: not-allowed;
+    }
 
+    /* 캡쳐용 캔버스 (숨김) */
+    #snap { display: none; }
   </style>
 </head>
 <body>
 
-<div id="container"></div>
+  <div id="container"></div>
 
-<div id="ui">
-  <div>
-    <button id="startBtn" class="control-btn">카메라 켜기</button>
-    <button id="stopBtn" class="control-btn">카메라 끄기</button>
+  <div id="ui-layer">
+    <div id="info">시스템 초기화 중...</div>
+
+    <div id="camera-wrapper">
+      <video id="cam" autoplay playsinline muted></video>
+      <div id="face-guide"></div>
+    </div>
+
+    <button id="snapBtn">📸 감정 분석 시작</button>
   </div>
-  <div id="info">왼쪽 위 버튼으로 카메라를 켜주세요.</div>
-</div>
 
-<div id="camera-section">
-  <button id="snapBtn">📸 사진 찍고 분석하기</button>
-  
-  <div id="camera-wrapper">
-    <video id="cam" autoplay playsinline muted></video>
-    <div id="face-guide"></div> </div>
-</div>
+  <canvas id="snap" width="640" height="480"></canvas>
 
-<canvas id="snap" width="640" height="480"></canvas>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-/* ===========================================================
-    중요: 서버 주소 설정
-    (나중에 Cloud Run 배포 후 여기에 주소를 넣어야 합니다.)
-=========================================================== */
-// 임시 주소 (나중에 교체 필수)
+/* [서버 주소 설정] 
+   Cloud Run 주소로 꼭 바꿔주세요! (뒤에 /analyze 포함)
+*/
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
 
-/* ===========================================================
-    1) 카메라 제어
-=========================================================== */
+/* ================= 1. 카메라 자동 실행 ================= */
 let stream = null;
 
 async function startCamera() {
@@ -175,122 +170,88 @@ async function startCamera() {
   const video = document.getElementById("cam");
 
   try {
-    // 태블릿 후면 카메라 대신 전면(셀카) 카메라 우선 요청
+    // 모바일 전면 카메라 우선
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: 640, height: 480 }
     });
     video.srcObject = stream;
-    info.innerHTML = "카메라가 켜졌습니다.<br>가이드라인에 얼굴을 맞추고<br>우측 하단 📸 버튼을 누르세요.";
+    info.innerHTML = "얼굴을 가이드에 맞추고 버튼을 눌러주세요.";
   } catch (e) {
-    info.textContent = "카메라 접근 실패: " + e.message + "\n(HTTPS 환경인지 확인해주세요)";
-    alert("카메라 접근 실패. HTTPS 접속이 필요합니다.");
+    console.error(e);
+    info.innerHTML = "카메라 권한이 필요합니다.<br>새로고침 하거나 설정에서 허용해주세요.";
   }
 }
 
-function stopCamera() {
-  const info = document.getElementById("info");
-  const video = document.getElementById("cam");
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-    video.srcObject = null;
-    info.textContent = "카메라가 꺼졌습니다.";
-  }
-}
+// 페이지 로드 되자마자 카메라 켜기
+window.addEventListener("load", startCamera);
 
 
-/* ===========================================================
-    2) 사진 캡쳐 → 서버 전송 → 결과 처리
-=========================================================== */
-async function snapAndAnalyze() {
-  const info = document.getElementById("info");
+/* ================= 2. 사진 캡쳐 및 분석 ================= */
+const snapBtn = document.getElementById("snapBtn");
+const info = document.getElementById("info");
+
+snapBtn.addEventListener("click", async () => {
   const video = document.getElementById("cam");
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  const snapBtn = document.getElementById("snapBtn");
 
-  if (!stream || !video.srcObject) {
-    alert("먼저 '카메라 켜기'를 눌러주세요!");
+  if (!stream) {
+    startCamera(); // 혹시 안 켜져있으면 재시도
     return;
   }
 
-  // 버튼 중복 클릭 방지 및 피드백
+  // 버튼 비활성화
   snapBtn.disabled = true;
-  const originalBtnText = snapBtn.innerHTML;
-  snapBtn.innerHTML = "⏳ 분석 중...";
-  snapBtn.style.background = "#999";
+  snapBtn.textContent = "⌛ 분석 중...";
 
-  // 캔버스에 현재 비디오 화면 그리기
-  // (좌우반전된 비디오를 다시 반전시켜서 정방향으로 캡쳐)
+  // 화면 캡쳐 (좌우 반전 보정)
   ctx.save();
   ctx.scale(-1, 1);
   ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  info.textContent = "이미지 캡쳐 완료. 서버 전송 준비...";
-
+  // Blob 변환 및 전송
   canvas.toBlob(async blob => {
-    if (!blob) {
-      info.textContent = "이미지 변환 실패";
-      resetButton();
+    if(!blob) {
+      info.textContent = "이미지 처리 오류";
+      resetBtn(); 
       return;
     }
-
-    info.textContent = "☁️ 서버로 이미지 전송 중...";
 
     const form = new FormData();
     form.append("frame", blob, "frame.jpg");
 
     try {
-      // 1. 서버 요청
+      info.textContent = "서버와 통신 중...";
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
-
-      // 2. 응답 처리
-      if (!res.ok) throw new Error(`서버 오류 (HTTP ${res.status})`);
       
-      const data = await res.json(); // 바로 JSON으로 파싱
+      if (!res.ok) throw new Error("서버 응답 오류");
+      const data = await res.json();
 
-      if (data.status !== "ok") {
-        throw new Error(data.error || data.detail || "알 수 없는 오류");
+      if (data.status === "ok") {
+        info.textContent = "분석 완료. 감정이 형상화됩니다.";
+        updateSphereFromEmotion(data);
+      } else {
+        throw new Error(data.error || "분석 실패");
       }
-
-      // 3. 성공 시 정보 표시 및 구 업데이트
-      info.innerHTML = "✅ 분석 성공!\n" +
-                       "감정 결과가 구에 반영되었습니다.\n\n" +
-                       JSON.stringify(data.emotions, null, 2);
-
-      updateSphereFromEmotion(data);
-
     } catch (err) {
       console.error(err);
-      info.textContent = "❌ 분석 실패:\n" + err.message;
-      // 아직 서버가 없을 때를 위한 안내
-      if(err.message.includes("Failed to fetch")) {
-        info.textContent += "\n\n(현재 서버 주소가 연결되지 않았습니다.\nHTML 코드의 SERVER_URL을 확인해주세요.)";
-      }
+      info.textContent = "오류: " + err.message;
+      alert("서버 연결 실패. 주소를 확인하세요.");
     } finally {
-      // 버튼 상태 복구
-      resetButton();
+      resetBtn();
     }
-  }, "image/jpeg", 0.95);
+  }, "image/jpeg", 0.9);
+});
 
-  function resetButton() {
-    snapBtn.disabled = false;
-    snapBtn.innerHTML = originalBtnText;
-    snapBtn.style.background = ""; // 원래 그라데이션으로 복귀
-  }
+function resetBtn() {
+  snapBtn.disabled = false;
+  snapBtn.textContent = "📸 다시 찍기";
 }
 
-// 이벤트 리스너 등록
-document.getElementById("startBtn").addEventListener("click", startCamera);
-document.getElementById("stopBtn").addEventListener("click", stopCamera);
-document.getElementById("snapBtn").addEventListener("click", snapAndAnalyze);
 
-
-/* ===========================================================
-    3) Three.js: "Digital Entropy (디지털 엔트로피)"
-    - AI 해석: 감정은 완벽한 데이터 구조(질서)를 무너뜨리는 노이즈(혼돈)다.
-=========================================================== */
+/* ================= 3. Three.js: Digital Entropy (AI Logic) ================= */
+// [수정됨] 구의 위치를 화면 상단으로 올림
 let scene, camera, renderer, geometry, points;
 let basePositions = []; 
 
@@ -301,32 +262,28 @@ let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0, arousal: 0 };
 function initThree() {
   const container = document.getElementById("container");
   scene = new THREE.Scene();
-  // 배경: 완전한 디지털 블랙
   scene.background = new THREE.Color(0x000000); 
 
   const W = window.innerWidth;
   const H = window.innerHeight;
 
   camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-  camera.position.set(0, 0, 8); 
+  camera.position.set(0, 0, 9); 
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(W, H);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  // 입자 생성: 질서정연한 느낌을 위해 점의 개수를 적당히 유지하되 크게
-  const count = 4000;
+  // 입자 생성
+  const count = 4500;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const sizes = new Float32Array(count); // 입자 크기도 개별 제어
   const R = 2.0; 
 
   basePositions = [];
 
   for (let i = 0; i < count; i++) {
-    // 1. 초기 상태: 완벽한 수학적 구 (질서)
-    // Fibonacci Sphere 알고리즘으로 균일하게 배치
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     const theta = 2 * Math.PI * i / goldenRatio;
     const phi = Math.acos(1 - 2 * (i + 0.5) / count);
@@ -341,30 +298,29 @@ function initThree() {
 
     basePositions.push({x, y, z});
 
-    // 색상: AI의 기본 컬러 = Cyan / Electric Blue
     colors[i * 3] = 0.0;
     colors[i * 3 + 1] = 1.0;
     colors[i * 3 + 2] = 1.0;
-    
-    sizes[i] = 1.0;
   }
 
   geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
 
-  // 쉐이더 느낌의 재질
   const material = new THREE.PointsMaterial({
-    size: 0.03,
+    size: 0.04,
     vertexColors: true,
     transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
-    sizeAttenuation: true
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending
   });
 
   points = new THREE.Points(geometry, material);
+  
+  // [중요] 구의 위치를 위로 올림 (Y축 +1.2)
+  // 하단 UI(카메라, 버튼)에 가려지지 않게 하기 위함
+  points.position.y = 1.2; 
+  
   scene.add(points);
 
   window.addEventListener("resize", () => {
@@ -383,7 +339,6 @@ function animate() {
 
   if (!points) return;
 
-  // 감정 상태 업데이트 (반응 속도: 0.08 - 기계적으로 빠릿하게)
   const speed = 0.08;
   currentEmotions.joy = lerp(currentEmotions.joy, targetEmotions.joy, speed);
   currentEmotions.sorrow = lerp(currentEmotions.sorrow, targetEmotions.sorrow, speed);
@@ -393,23 +348,13 @@ function animate() {
 
   const positions = geometry.attributes.position.array;
   const colors = geometry.attributes.color.array;
-  
-  // 시간 변수
   const time = performance.now() * 0.001;
   
-  const joy = currentEmotions.joy;
-  const sorrow = currentEmotions.sorrow;
-  const anger = currentEmotions.anger;
-  const surprise = currentEmotions.surprise;
-  const arousal = currentEmotions.arousal;
+  const { joy, sorrow, anger, surprise, arousal } = currentEmotions;
 
-  // 기본 회전: 기계적인 등속 회전
   points.rotation.y = time * 0.2;
-  
-  // 분노 시 회전이 뚝뚝 끊김 (Lag 현상)
   if (Math.random() < anger * 0.3) {
       points.rotation.y += (Math.random() - 0.5) * 0.5;
-      points.rotation.x += (Math.random() - 0.5) * 0.5;
   }
 
   for (let i = 0; i < basePositions.length; i++) {
@@ -420,45 +365,21 @@ function animate() {
     let ny = base.y;
     let nz = base.z;
 
-    // --- [1. AI의 감정 해석: 데이터 변형] ---
-
-    // A. 기쁨 (Joy) = 데이터 확장 및 순환 (Processing Power Increase)
-    // 구가 커지면서 사인파 형태로 부드럽게 물결침 (안정적인 오버클럭)
     const joyWave = Math.sin(time * 3 + base.y * 2) * joy * 0.5;
     const joyExpand = 1.0 + (joy * 0.5);
-    
-    // B. 분노 (Anger) = 글리치 노이즈 (System Instability)
-    // 입자들이 랜덤하게 튀어 나감 (고주파 노이즈)
-    // Math.random()을 매 프레임 호출하면 지직거리는 효과 남
     const glitchX = (Math.random() - 0.5) * anger * 0.6;
     const glitchY = (Math.random() - 0.5) * anger * 0.6;
     const glitchZ = (Math.random() - 0.5) * anger * 0.6;
-
-    // C. 슬픔 (Sorrow) = 데이터 압축 및 소실 (Signal Loss)
-    // 구가 찌그러지고(납작해짐) 입자들이 중심이나 바닥으로 꺼짐
     const collapse = 1.0 - (sorrow * 0.6);
-    
-    // D. 놀람 (Surprise) = 산란 (Scattering)
-    // 입자들이 밖으로 확 흩어짐
     const scatter = surprise * Math.sin(time * 10 + i) * 0.3;
 
-    // 좌표 합성
-    // 1. 기쁨(확장)과 슬픔(축소) 적용
     nx *= joyExpand * collapse;
     ny *= joyExpand * collapse;
     nz *= joyExpand * collapse;
+    nx += base.x * joyWave + glitchX + scatter;
+    ny += base.y * joyWave + glitchY + scatter;
+    nz += base.z * joyWave + glitchZ + scatter;
 
-    // 2. 기쁨의 물결 추가 (방향성 있게)
-    nx += base.x * joyWave;
-    ny += base.y * joyWave;
-    nz += base.z * joyWave;
-
-    // 3. 분노의 글리치(노이즈)는 좌표 자체를 뒤흔듦
-    nx += glitchX + scatter;
-    ny += glitchY + scatter;
-    nz += glitchZ + scatter;
-
-    // 슬픔일 때 y축 데이터가 바닥으로 흐름 (흘러내리는 데이터)
     if (sorrow > 0.1) {
         ny -= Math.abs(Math.sin(time * 0.5 + base.x)) * sorrow * 1.5;
     }
@@ -467,50 +388,18 @@ function animate() {
     positions[idx + 1] = ny;
     positions[idx + 2] = nz;
 
+    // Color Logic
+    let r = 0.0, g = 1.0, b = 1.0; // Cyan Base
 
-    // --- [2. 색상: 시스템 상태 표시] ---
-
-    // 기본색: Cyan (0, 1, 1) - 정상 작동 중
-    let r = 0.0;
-    let g = 1.0;
-    let b = 1.0;
-
-    if (joy > 0.1) {
-        // 기쁨: High Performance Mode (Magenta/Pink)
-        // Cyan과 섞이면서 파스텔 톤의 화려한 색이 됨
-        r += joy * 1.0; 
-        g -= joy * 0.5; // Green을 빼서 Pink로
+    if (joy > 0.1) { r += joy; g -= joy * 0.5; }
+    if (anger > 0.1) { 
+        const flash = Math.sin(time * 30) > 0 ? 1 : 0.5;
+        r += anger * flash; g -= anger; b -= anger; 
     }
+    if (sorrow > 0.1) { r = 0.1; g = 0.1 + (1-sorrow)*0.5; b = 0.3 + (1-sorrow)*0.7; }
+    if (surprise > 0.1) { r += surprise; g += surprise; b += surprise; }
     
-    if (anger > 0.1) {
-        // 분노: Critical Error (Red/Orange)
-        // 강렬하게 깜빡거림
-        const flash = Math.sin(time * 30) > 0 ? 1 : 0.5; // 깜빡임
-        r += anger * 1.0 * flash;
-        g -= anger * 1.0;
-        b -= anger * 1.0;
-    }
-
-    if (sorrow > 0.1) {
-        // 슬픔: Power Saving / Dim (Dark Blue/Grey)
-        // 빛이 꺼져가는 느낌
-        r = 0.1;
-        g = 0.1 + (1 - sorrow) * 0.5;
-        b = 0.3 + (1 - sorrow) * 0.7;
-    }
-    
-    if (surprise > 0.1) {
-        // 놀람: White Flash (Overexposure)
-        // 모든 색상이 최대치로
-        r += surprise;
-        g += surprise;
-        b += surprise;
-    }
-
-    // 흥분도(Arousal)가 높으면 전체 밝기(Intensity) 증가
-    r += arousal * 0.2;
-    g += arousal * 0.2;
-    b += arousal * 0.2;
+    r += arousal * 0.2; g += arousal * 0.2; b += arousal * 0.2;
 
     colors[idx] = Math.min(1, Math.max(0, r));
     colors[idx + 1] = Math.min(1, Math.max(0, g));
@@ -523,30 +412,18 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-/* ===========================================================
-    4) 데이터 수신부 (서버에서 받은 값을 목표치로 설정)
-=========================================================== */
 function updateSphereFromEmotion(data) {
   if (!data.emotions) return;
   const e = data.emotions;
-  
   targetEmotions.joy = e.joy || 0;
   targetEmotions.sorrow = e.sorrow || 0;
   targetEmotions.anger = e.anger || 0;
   targetEmotions.surprise = e.surprise || 0;
   targetEmotions.arousal = (data.arousal || 0) * 0.5; 
-  
-  console.log("AI State Updated:", targetEmotions);
 }
 
 initThree();
 animate();
-
-
-  
 </script>
 </body>
 </html>
-
-
-
