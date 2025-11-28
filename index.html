@@ -221,7 +221,7 @@ scanBtn.addEventListener("click", async () => {
 
       if (data.status === "ok") {
         infoText.textContent = "";
-        updateEmotionViz(data); // 감정 시각화 업데이트
+        updateEmotionShape(data); // ← 여기서 형상 업데이트
       } else {
         infoText.textContent = "인식된 얼굴이 없습니다.";
         resetEmotion(false);
@@ -282,7 +282,7 @@ window.addEventListener("click", () => {
 });
 
 
-/* ================= [2] 감정 나침반 Canvas 시각화 ================= */
+/* ================= [2] 감정 → 추상 형상(Emotion Creature) Canvas ================= */
 
 // #container 안에 풀스크린 캔버스 하나 추가
 const container = document.getElementById("container");
@@ -293,54 +293,50 @@ emotionCanvas.style.top = "0";
 emotionCanvas.style.left = "0";
 emotionCanvas.style.width = "100%";
 emotionCanvas.style.height = "100%";
-emotionCanvas.style.pointerEvents = "none"; // 터치 방해하지 않게
+emotionCanvas.style.pointerEvents = "none"; // 터치 방해 X
 container.appendChild(emotionCanvas);
 
 const ectx = emotionCanvas.getContext("2d");
-let canvasWidth = 0;
-let canvasHeight = 0;
+let cw = 0;
+let ch = 0;
 
-// hiDPI 대응
 function resizeEmotionCanvas() {
   const dpr = window.devicePixelRatio || 1;
   const rect = container.getBoundingClientRect();
-  canvasWidth = rect.width;
-  canvasHeight = rect.height;
+  cw = rect.width;
+  ch = rect.height;
   emotionCanvas.width = rect.width * dpr;
   emotionCanvas.height = rect.height * dpr;
   ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-
 window.addEventListener("resize", resizeEmotionCanvas);
 resizeEmotionCanvas();
 
-// 감정 상태
 let currentEmotion = {
   joy: 0,
   sorrow: 0,
   anger: 0,
   surprise: 0,
-  intensity: 0,
-  labelMain: "",
-  labelSub: ""
+  valence: 0,
+  energy: 0,
+  tension: 0,
+  instability: 0
 };
 
 let targetEmotion = { ...currentEmotion };
 let analyzing = false;
 let lastTime = 0;
 
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
+function lerp(a, b, t) { return a + (b - a) * t; }
 
-// 구글 비전에서 온 감정값 정리 & 필터링
+// 원시 감정값 → 조합된 지표 + 정제
 function processEmotions(raw) {
   let joy = raw.joy ?? 0;
   let sorrow = raw.sorrow ?? 0;
   let anger = raw.anger ?? 0;
   let surprise = raw.surprise ?? 0;
 
-  // 혹시 0~3 같은 값이면 스케일링
+  // 혹시 0~3 같은 값이면 0~1로 스케일링
   const maxRaw = Math.max(joy, sorrow, anger, surprise, 1);
   if (maxRaw > 1.0) {
     joy /= maxRaw;
@@ -349,89 +345,47 @@ function processEmotions(raw) {
     surprise /= maxRaw;
   }
 
-  // 가장 큰 값 기준으로 너무 작은 감정은 아예 버려서
-  // "joy 1.0 surprise 1.0" 같은 극단적 동시값만 남기고
-  // 애매한 노이즈는 삭제
-  const arr = [
-    { key: "joy", kor: "기쁨", value: joy },
-    { key: "sorrow", kor: "슬픔", value: sorrow },
-    { key: "anger", kor: "분노", value: anger },
-    { key: "surprise", kor: "놀람", value: surprise }
-  ];
-  arr.sort((a, b) => b.value - a.value);
-  const maxVal = arr[0].value;
+  // 아주 작은 노이즈는 제거
+  const noiseCut = 0.08;
+  if (joy < noiseCut) joy = 0;
+  if (sorrow < noiseCut) sorrow = 0;
+  if (anger < noiseCut) anger = 0;
+  if (surprise < noiseCut) surprise = 0;
 
-  // max 기준 40% 미만은 0으로 잘라냄 (노이즈 제거)
-  const cutoff = maxVal * 0.4;
-  for (const obj of arr) {
-    if (obj.value < cutoff) obj.value = 0;
-  }
-
-  // 다시 변수로
-  joy = arr.find(e => e.key === "joy").value;
-  sorrow = arr.find(e => e.key === "sorrow").value;
-  anger = arr.find(e => e.key === "anger").value;
-  surprise = arr.find(e => e.key === "surprise").value;
-
+  // 다시 normalize
   const sum = joy + sorrow + anger + surprise;
-  let wJoy = 0, wSor = 0, wAng = 0, wSur = 0;
   if (sum > 0) {
-    wJoy = joy / sum;
-    wSor = sorrow / sum;
-    wAng = anger / sum;
-    wSur = surprise / sum;
+    joy /= sum;
+    sorrow /= sum;
+    anger /= sum;
+    surprise /= sum;
   }
 
-  // 라벨용 텍스트 생성
-  let labelMain = "감정을 해석할 수 없습니다";
-  let labelSub = "";
+  const energy = sum > 0 ? Math.max(joy, sorrow, anger, surprise) : 0;  // 전체 강도
+  const valence = joy - sorrow;        // +면 밝음, -면 어두움
+  const tension = anger;              // 분노 → 날카로움
+  const instability = surprise;       // 놀람 → 불안정, 들쑥날쑥
 
-  if (maxVal < 0.2) {
-    labelMain = "감정이 거의 감지되지 않았습니다";
-  } else {
-    const active = arr.filter(e => e.value > 0);
-    if (active.length === 1) {
-      const p = Math.round((active[0].value / (sum || 1)) * 100);
-      labelMain = `${active[0].kor}이(가) 우세한 표정`;
-      labelSub = `AI 추정 강도: 약 ${p}%`;
-    } else if (active.length >= 2) {
-      const a = active[0];
-      const b = active[1];
-      const p1 = Math.round((a.value / (sum || 1)) * 100);
-      const p2 = Math.round((b.value / (sum || 1)) * 100);
-      labelMain = `${a.kor}과(와) ${b.kor}이(가 섞인 표정`;
-      labelSub = `${a.kor} 약 ${p1}%, ${b.kor} 약 ${p2}%`;
-    }
-  }
-
-  return {
-    joy: wJoy,
-    sorrow: wSor,
-    anger: wAng,
-    surprise: wSur,
-    intensity: maxVal, // 가장 강한 감정의 세기
-    labelMain,
-    labelSub
-  };
+  return { joy, sorrow, anger, surprise, valence, energy, tension, instability };
 }
 
-// 서버에서 받은 감정값 → 타겟 상태 업데이트
-function updateEmotionViz(data) {
+// 서버에서 온 감정 → 타겟 업데이트
+function updateEmotionShape(data) {
   if (!data.emotions) return;
   targetEmotion = processEmotions(data.emotions);
 
-  // 감정이 강할수록 더 또렷하게 보이도록
+  // 감정이 거의 없으면 아주 작은 에너지만 남김
+  if (targetEmotion.energy < 0.15) {
+    targetEmotion.energy = 0.0;
+  }
 }
 
-// 분석 중 상태
-function setAnalyzingState(isAnalyzing) {
-  analyzing = isAnalyzing;
-}
+// 분석 중
+function setAnalyzingState(isAnalyzing) { analyzing = isAnalyzing; }
 
-// 카메라 화면에서 뒤에 깔리는 잔잔한 상태
+// 카메라 화면으로 돌아갈 때 살짝 잔상만 남기고 약하게
 function setBackgroundState() {
-  // 감정은 유지하되 강도만 살짝 줄임
-  targetEmotion.intensity *= 0.5;
+  targetEmotion.energy *= 0.4;
 }
 
 // 리셋
@@ -442,237 +396,248 @@ function resetEmotion(fully) {
       sorrow: 0,
       anger: 0,
       surprise: 0,
-      intensity: 0,
-      labelMain: "",
-      labelSub: ""
+      valence: 0,
+      energy: 0,
+      tension: 0,
+      instability: 0
     };
   } else {
-    targetEmotion.intensity *= 0.3;
+    targetEmotion.energy *= 0.2;
   }
 }
 
-// 메인 그리기 루프
-function drawEmotionCompass(delta) {
-  const t = Math.min(delta * 0.005, 0.2); // 보간 속도
+// 색 보간용
+function mixColor(c1, c2, t) {
+  const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+  const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+  const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+  return `rgb(${r},${g},${b})`;
+}
 
-  // 현재 상태를 타겟에 맞춰 부드럽게 보간
-  currentEmotion.joy = lerp(currentEmotion.joy, targetEmotion.joy, t);
-  currentEmotion.sorrow = lerp(currentEmotion.sorrow, targetEmotion.sorrow, t);
-  currentEmotion.anger = lerp(currentEmotion.anger, targetEmotion.anger, t);
-  currentEmotion.surprise = lerp(currentEmotion.surprise, targetEmotion.surprise, t);
-  currentEmotion.intensity = lerp(currentEmotion.intensity, targetEmotion.intensity, t);
-  currentEmotion.labelMain = targetEmotion.labelMain;
-  currentEmotion.labelSub = targetEmotion.labelSub;
+// 메인 그리기
+function drawEmotionCreature(dt) {
+  const t = Math.min(dt * 0.004, 0.25); // 보간 속도
 
-  const w = canvasWidth;
-  const h = canvasHeight;
-  if (w === 0 || h === 0) return;
+  // 현재 감정을 타겟으로 부드럽게 이동
+  currentEmotion.joy        = lerp(currentEmotion.joy,        targetEmotion.joy,        t);
+  currentEmotion.sorrow     = lerp(currentEmotion.sorrow,     targetEmotion.sorrow,     t);
+  currentEmotion.anger      = lerp(currentEmotion.anger,      targetEmotion.anger,      t);
+  currentEmotion.surprise   = lerp(currentEmotion.surprise,   targetEmotion.surprise,   t);
+  currentEmotion.valence    = lerp(currentEmotion.valence,    targetEmotion.valence,    t);
+  currentEmotion.energy     = lerp(currentEmotion.energy,     targetEmotion.energy,     t);
+  currentEmotion.tension    = lerp(currentEmotion.tension,    targetEmotion.tension,    t);
+  currentEmotion.instability= lerp(currentEmotion.instability,targetEmotion.instability,t);
 
-  // 배경 살짝 어둡게
+  const w = cw;
+  const h = ch;
+  if (!w || !h) return;
+
+  const time = performance.now() * 0.001;
+
+  // 배경
   ectx.clearRect(0, 0, w, h);
-  ectx.fillStyle = "rgba(0,0,0,0.8)";
-  ectx.fillRect(0, 0, w, h);
+  const bgGrad = ectx.createRadialGradient(
+    w/2, h*0.4, 0,
+    w/2, h*0.4, Math.max(w,h)*0.7
+  );
+  bgGrad.addColorStop(0, "rgba(0,0,0,0.0)");
+  bgGrad.addColorStop(1, "rgba(0,0,0,0.95)");
+  ectx.fillStyle = bgGrad;
+  ectx.fillRect(0,0,w,h);
 
   const cx = w / 2;
-  const cy = h * 0.45;
-  const baseRadius = Math.min(w, h) * 0.07;
-  const extraRadius = Math.min(w, h) * 0.12 * (0.3 + currentEmotion.intensity);
+  const cy = h * 0.42;
 
-  // 전체 "호흡" 애니메이션
-  const time = performance.now() * 0.001;
-  const breath = Math.sin(time * 1.0) * 0.05;
+  // 감정 기반 파라미터들
+  const E  = currentEmotion.energy;     // 전체 세기 (0~1)
+  const V  = currentEmotion.valence;    // -1~1 : 음/양
+  const Tn = currentEmotion.tension;    // 0~1 : 뾰족함
+  const In = currentEmotion.instability;// 0~1 : 흔들림
 
-  // 분석 중일 때는 살짝 회전
-  const baseRotation = analyzing ? time * 1.2 : 0;
+  const baseR = Math.min(w,h) * (0.12 + 0.18*E); // 전체 크기
+  const lobes = 3 + Math.round( In * 5 );        // 3~8개 "꽃잎"
+  const spikiness = 0.2 + Tn * 0.9;              // 분노 많을수록 더 스파이크
+  const wobbleAmp = 0.08 + In * 0.25;            // 놀람 많을수록 파형이 요동
+  const asymX = V * 0.6;                         // 즐거움-슬픔 비대칭
+  const asymY = currentEmotion.sorrow * 0.7;     // 슬픔 많을수록 아래로 쳐짐
+  const breathing = Math.sin(time*1.2) * (0.05 + E*0.15);
 
-  // 각 감정 방향(라디안)
-  const angles = {
-    joy: -Math.PI / 2,
-    anger: 0,
-    sorrow: Math.PI / 2,
-    surprise: Math.PI
-  };
+  // 색: joy(노랑), sorrow(파랑), anger(빨강), surprise(흰색)의 비율로 섞기
+  const cJoy = [255, 210, 90];
+  const cSor = [90, 140, 255];
+  const cAng = [255, 80, 80];
+  const cSur = [255,255,255];
 
-  // 각 감정별 색
-  const colors = {
-    joy: "#ffd86b",
-    sorrow: "#6fa8ff",
-    anger: "#ff5a5a",
-    surprise: "#ffffff"
-  };
+  const totalW = currentEmotion.joy + currentEmotion.sorrow + currentEmotion.anger + currentEmotion.surprise || 1;
+  const wJoy = currentEmotion.joy      / totalW;
+  const wSor = currentEmotion.sorrow   / totalW;
+  const wAng = currentEmotion.anger    / totalW;
+  const wSur = currentEmotion.surprise / totalW;
 
-  // 각 감정 끝점 위치 계산
-  const ends = {};
+  const mixedColor = [
+    cJoy[0]*wJoy + cSor[0]*wSor + cAng[0]*wAng + cSur[0]*wSur,
+    cJoy[1]*wJoy + cSor[1]*wSor + cAng[1]*wAng + cSur[1]*wSur,
+    cJoy[2]*wJoy + cSor[2]*wSor + cAng[2]*wAng + cSur[2]*wSur
+  ];
 
-  ["joy", "anger", "sorrow", "surprise"].forEach(key => {
-    const ang = angles[key] + baseRotation;
-    const wVal = currentEmotion[key];
-    const r = baseRadius + extraRadius * wVal * (1 + breath);
-    const ex = cx + Math.cos(ang) * r;
-    const ey = cy + Math.sin(ang) * r;
+  // 살짝 desaturate + 어둡게
+  const baseColor = [
+    mixedColor[0]*0.9,
+    mixedColor[1]*0.9,
+    mixedColor[2]*0.9
+  ];
 
-    ends[key] = { x: ex, y: ey, weight: wVal };
-  });
+  // 형상 그리기 (polar curve)
+  ectx.save();
+  ectx.translate(cx, cy);
 
-  // 중심에 옅은 원 (전체 감정의 "용기")
-  const auraR = baseRadius + extraRadius * currentEmotion.intensity * 0.4;
-  const grd = ectx.createRadialGradient(cx, cy, auraR * 0.1, cx, cy, auraR);
-  grd.addColorStop(0, "rgba(255,255,255,0.25)");
-  grd.addColorStop(1, "rgba(255,255,255,0.0)");
-  ectx.fillStyle = grd;
+  // 분석 중에는 살짝 회전
+  const rot = analyzing ? time*1.5 : 0;
+  ectx.rotate(rot);
+
   ectx.beginPath();
-  ectx.arc(cx, cy, auraR, 0, Math.PI * 2);
+  const steps = 260;
+  for (let i=0; i<=steps; i++) {
+    const tRatio = i/steps;
+    const theta = tRatio * Math.PI*2;
+
+    // 기본 반경 + 감정 기반 변동
+    const lobeTerm = Math.cos(lobes*theta + V*1.5 + time*0.7*In);
+    const wobble   = Math.sin(theta*2 + time*1.3) * wobbleAmp;
+    let r = baseR * (1 + spikiness*lobeTerm + wobble + breathing);
+
+    // 비대칭 (valence / sorrow)
+    const ax = 1 + asymX * Math.cos(theta);
+    const ay = 1 + asymY * Math.sin(theta - Math.PI/2);
+
+    const x = Math.cos(theta)*r*ax;
+    const y = Math.sin(theta)*r*ay + asymY*baseR*0.5;
+
+    if (i===0) ectx.moveTo(x,y);
+    else ectx.lineTo(x,y);
+  }
+  ectx.closePath();
+
+  // 안쪽에서 바깥쪽으로 색 그라데이션
+  const grad = ectx.createRadialGradient(0,0,baseR*0.2, 0,0,baseR*1.4);
+  grad.addColorStop(0, `rgba(${baseColor[0]},${baseColor[1]},${baseColor[2]},${0.9*Math.max(E,0.2)})`);
+  grad.addColorStop(1, `rgba(${baseColor[0]*0.3},${baseColor[1]*0.3},${baseColor[2]*0.4},0)`);
+
+  ectx.fillStyle = grad;
   ectx.fill();
 
-  // 감정 "꽃잎" (각 감정 방향으로 뻗은 형태)
-  ["joy", "anger", "sorrow", "surprise"].forEach(key => {
-    const end = ends[key];
-    if (end.weight <= 0.001) return; // 감정이 거의 없으면 그리지 않음
+  // 윤곽선: 분노 많을수록 두껍고 거칠게
+  ectx.lineWidth = 1 + Tn*4;
+  ectx.strokeStyle = `rgba(255,255,255,${0.25+Tn*0.5})`;
+  ectx.stroke();
 
-    const ang = angles[key] + baseRotation;
-    const midAng1 = ang - 0.25;
-    const midAng2 = ang + 0.25;
-    const rInner = baseRadius * 0.4;
-    const rOuter = baseRadius + extraRadius * end.weight;
+  // 경계에 점/가시 표현 (분노, 놀람 조합)
+  const edgeCount = Math.round(80 + 120*(Tn+In)*0.5);
+  ectx.lineWidth = 0;
+  for (let i=0; i<edgeCount; i++) {
+    const tt = i/edgeCount;
+    const theta = tt * Math.PI*2;
 
-    const x1 = cx + Math.cos(midAng1) * rInner;
-    const y1 = cy + Math.sin(midAng1) * rInner;
-    const x2 = cx + Math.cos(midAng1) * rOuter;
-    const y2 = cy + Math.sin(midAng1) * rOuter;
-    const x3 = cx + Math.cos(midAng2) * rOuter;
-    const y3 = cy + Math.sin(midAng2) * rOuter;
-    const x4 = cx + Math.cos(midAng2) * rInner;
-    const y4 = cy + Math.sin(midAng2) * rInner;
+    const lobeTerm = Math.cos(lobes*theta + V*1.5 + time*0.7*In);
+    const wobble   = Math.sin(theta*2 + time*1.3) * wobbleAmp;
+    let r = baseR * (1 + spikiness*lobeTerm + wobble + breathing);
 
+    const ax = 1 + asymX * Math.cos(theta);
+    const ay = 1 + asymY * Math.sin(theta - Math.PI/2);
+
+    const x = Math.cos(theta)*r*ax;
+    const y = Math.sin(theta)*r*ay + asymY*baseR*0.5;
+
+    const spike = 1 + (Tn*0.9 + In*0.4)*Math.random();
+    const sx = x * spike;
+    const sy = y * spike;
+
+    const dotAlpha = 0.15 + 0.35*(Tn + In)*0.5;
+    ectx.fillStyle = `rgba(255,255,255,${dotAlpha})`;
     ectx.beginPath();
-    ectx.moveTo(x1, y1);
-    ectx.quadraticCurveTo(cx, cy, x2, y2);
-    ectx.lineTo(x3, y3);
-    ectx.quadraticCurveTo(cx, cy, x4, y4);
-    ectx.closePath();
-
-    const alpha = 0.3 + end.weight * 0.6;
-    ectx.fillStyle = hexToRgba(colors[key], alpha);
+    ectx.arc(sx, sy, 1.2 + 2.5*Tn, 0, Math.PI*2);
     ectx.fill();
-  });
+  }
 
-  // 중심 원
-  ectx.beginPath();
-  ectx.arc(cx, cy, baseRadius * 0.4, 0, Math.PI * 2);
+  // "눈" 같은 핵심 포인트 (사람이 얼굴처럼 느끼도록 살짝 힌트)
+  const eyeOffsetY = -baseR*0.15;
+  const eyeSpread  = baseR*0.35*(1+In*0.3);
+
+  const eyeSize = 4 + 10*E;
+  const innerGlow = 0.3 + E*0.5;
+
   ectx.fillStyle = "rgba(0,0,0,0.8)";
-  ectx.fill();
-  ectx.lineWidth = 1;
-  ectx.strokeStyle = "rgba(255,255,255,0.4)";
-  ectx.stroke();
-
-  // 중심 십자선
-  ectx.strokeStyle = "rgba(255,255,255,0.1)";
   ectx.beginPath();
-  ectx.moveTo(cx - baseRadius * 1.1, cy);
-  ectx.lineTo(cx + baseRadius * 1.1, cy);
-  ectx.stroke();
-  ectx.beginPath();
-  ectx.moveTo(cx, cy - baseRadius * 1.1);
-  ectx.lineTo(cx, cy + baseRadius * 1.1);
-  ectx.stroke();
-
-  // 각 감정 라벨 (네 귀퉁이)
-  ectx.font = "12px Pretendard, system-ui, sans-serif";
-  ectx.textAlign = "center";
-  ectx.textBaseline = "middle";
-
-  drawEmotionLabel(cx, cy - auraR * 1.2, "기쁨", currentEmotion.joy, colors.joy);
-  drawEmotionLabel(cx + auraR * 1.4, cy, "분노", currentEmotion.anger, colors.anger);
-  drawEmotionLabel(cx, cy + auraR * 1.2, "슬픔", currentEmotion.sorrow, colors.sorrow);
-  drawEmotionLabel(cx - auraR * 1.4, cy, "놀람", currentEmotion.surprise, colors.surprise);
-
-  // 하단 텍스트 박스
-  drawBottomTextBox();
-}
-
-function drawEmotionLabel(x, y, text, weight, color) {
-  const alpha = 0.25 + weight * 0.6;
-  ectx.fillStyle = hexToRgba(color, alpha);
-  ectx.beginPath();
-  ectx.arc(x, y, 8 + weight * 12, 0, Math.PI * 2);
+  ectx.arc(-eyeSpread, eyeOffsetY, eyeSize, 0, Math.PI*2);
+  ectx.arc( eyeSpread, eyeOffsetY, eyeSize, 0, Math.PI*2);
   ectx.fill();
 
-  ectx.fillStyle = "rgba(255,255,255,0.85)";
+  ectx.fillStyle = `rgba(255,255,255,${innerGlow})`;
+  ectx.beginPath();
+  ectx.arc(-eyeSpread-eyeSize*0.2, eyeOffsetY-eyeSize*0.1, eyeSize*0.35, 0, Math.PI*2);
+  ectx.arc( eyeSpread-eyeSize*0.2,  eyeOffsetY-eyeSize*0.1, eyeSize*0.35, 0, Math.PI*2);
+  ectx.fill();
+
+  // 아래쪽에 "입"처럼 보이는 곡선 (valence에 따라 모양 바뀜)
+  const mouthWidth = baseR*0.7;
+  const mouthY = baseR*0.25 + asymY*baseR*0.2;
+  const smile = V; // 양수면 웃고, 음수면 처짐
+
+  ectx.beginPath();
+  ectx.moveTo(-mouthWidth*0.6, mouthY);
+  ectx.quadraticCurveTo(
+    0,
+    mouthY + baseR*0.25*smile,
+    mouthWidth*0.6,
+    mouthY
+  );
+  ectx.strokeStyle = `rgba(255,255,255,${0.25 + 0.3*Math.abs(V)})`;
+  ectx.lineWidth = 1.2 + 2*Math.abs(V);
+  ectx.stroke();
+
+  ectx.restore();
+
+  // 아래에 아주 작은 텍스트 힌트 (선택사항)
   ectx.font = "11px Pretendard, system-ui, sans-serif";
   ectx.textAlign = "center";
   ectx.textBaseline = "middle";
-  ectx.fillText(text, x, y - 16);
+  ectx.fillStyle = "rgba(255,255,255,0.45)";
+
+  let text = "";
+  if (E < 0.05) {
+    text = "AI가 감정을 거의 감지하지 못했습니다.";
+  } else {
+    const pieces = [];
+    if (currentEmotion.joy > 0.25)    pieces.push("기쁨");
+    if (currentEmotion.sorrow > 0.25) pieces.push("슬픔");
+    if (currentEmotion.anger > 0.25)  pieces.push("분노");
+    if (currentEmotion.surprise > 0.25) pieces.push("놀람");
+
+    if (pieces.length === 0) {
+      text = "애매한 감정이 섞여 있습니다.";
+    } else if (pieces.length === 1) {
+      text = `${pieces[0]}이(가) 강한 형상입니다.`;
+    } else {
+      text = pieces.join(" · ") + " 이(가) 섞인 형상입니다.";
+    }
+  }
+
+  ectx.fillText(text, w/2, h*0.8);
 }
 
-function drawBottomTextBox() {
-  const w = canvasWidth;
-  const h = canvasHeight;
-  const boxWidth = Math.min(420, w * 0.8);
-  const boxHeight = 70;
-  const x = (w - boxWidth) / 2;
-  const y = h * 0.75;
+// 루프
+function loop(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = ts - lastTime;
+  lastTime = ts;
 
-  // 바탕
-  ectx.fillStyle = "rgba(0,0,0,0.65)";
-  ectx.beginPath();
-  const r = 12;
-  roundedRect(ectx, x, y, boxWidth, boxHeight, r);
-  ectx.fill();
-
-  // 테두리
-  ectx.strokeStyle = "rgba(255,255,255,0.25)";
-  ectx.lineWidth = 1;
-  ectx.stroke();
-
-  // 텍스트
-  ectx.fillStyle = "rgba(255,255,255,0.9)";
-  ectx.textAlign = "center";
-  ectx.textBaseline = "middle";
-
-  ectx.font = "14px Pretendard, system-ui, sans-serif";
-  const main = currentEmotion.labelMain || "아직 감정을 읽는 중입니다";
-  ectx.fillText(main, x + boxWidth / 2, y + boxHeight / 2 - 10);
-
-  ectx.font = "11px Pretendard, system-ui, sans-serif";
-  const sub = currentEmotion.labelSub || "카메라를 응시하고 자연스러운 표정을 지어보세요.";
-  ectx.fillStyle = "rgba(255,255,255,0.7)";
-  ectx.fillText(sub, x + boxWidth / 2, y + boxHeight / 2 + 14);
+  drawEmotionCreature(dt);
+  requestAnimationFrame(loop);
 }
+requestAnimationFrame(loop);
 
-function roundedRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-function hexToRgba(hex, alpha) {
-  const c = hex.replace("#", "");
-  const num = parseInt(c, 16);
-  const r = (num >> 16) & 255;
-  const g = (num >> 8) & 255;
-  const b = num & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-// 애니메이션 루프 시작
-function emotionLoop(timestamp) {
-  if (!lastTime) lastTime = timestamp;
-  const delta = timestamp - lastTime;
-  lastTime = timestamp;
-
-  drawEmotionCompass(delta);
-  requestAnimationFrame(emotionLoop);
-}
-requestAnimationFrame(emotionLoop);
 </script>
 </body>
 </html>
+
 
