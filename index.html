@@ -11,30 +11,67 @@
     
     /* UI 레이어 */
     #ui-layer {
-      position: absolute; bottom: 30px; left: 0; width: 100%;
-      display: flex; flex-direction: column; align-items: center; pointer-events: none;
-      z-index: 10;
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+      display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+      padding-bottom: 40px;
     }
     
     #info {
-      color: rgba(255,255,255,0.7); margin-bottom: 20px; font-size: 14px; text-align: center;
-      text-shadow: 0 0 5px rgba(0,0,0,0.8); font-weight: 300; letter-spacing: 1px;
+      position: absolute; top: 30px; width: 100%;
+      color: rgba(255,255,255,0.6); font-size: 14px; text-align: center;
+      text-shadow: 0 0 5px rgba(0,0,0,0.8); letter-spacing: 1px;
+    }
+
+    /* 1. 카메라 미리보기 창 (원형) */
+    #camera-frame {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: #000;
+      overflow: hidden;
+      margin-bottom: 20px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      position: relative;
+      pointer-events: auto; /* 터치 가능 */
+    }
+    
+    #cam {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* 거울모드 */
+      opacity: 0.8;
+    }
+
+    /* 스캔 라인 효과 (카메라 위) */
+    #scan-line {
+      position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+      background: rgba(0, 255, 255, 0.8);
+      box-shadow: 0 0 10px cyan;
+      animation: scan 2s infinite linear;
+    }
+    @keyframes scan {
+      0% { top: 0%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
     }
     
     #snapBtn {
       pointer-events: auto;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      color: #fff; padding: 18px 50px; border-radius: 40px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff; padding: 16px 40px; border-radius: 50px;
       font-size: 16px; backdrop-filter: blur(10px);
-      transition: all 0.3s ease; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+      transition: all 0.2s ease; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     }
-    #snapBtn:hover { background: rgba(255, 255, 255, 0.25); box-shadow: 0 0 20px rgba(255,255,255,0.3); transform: scale(1.05); }
+    #snapBtn:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); color: cyan; border-color: cyan; }
     #snapBtn:active { transform: scale(0.95); }
-    #snapBtn:disabled { opacity: 0.5; transform: scale(1); cursor: wait; }
+    #snapBtn:disabled { opacity: 0.5; transform: scale(1); cursor: wait; border-color: #555; color: #aaa; }
 
-    /* 분석용 요소 숨김 */
-    #cam, #snap { display: none; } 
+    /* 캡쳐용 캔버스 (숨김) */
+    #snap { display: none; } 
   </style>
 </head>
 <body>
@@ -43,16 +80,21 @@
 
 <div id="ui-layer">
   <div id="info">나의 형상이 데이터 입자로 재구성됩니다.</div>
-  <button id="snapBtn">📸 형상화 (Capture)</button>
+  
+  <div id="camera-frame">
+    <video id="cam" autoplay playsinline muted></video>
+    <div id="scan-line"></div>
+  </div>
+
+  <button id="snapBtn">📸 CAPTURE</button>
 </div>
 
-<video id="cam" autoplay playsinline muted></video>
 <canvas id="snap" width="640" height="480"></canvas>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-// [중요] 여기에 Cloud Run 주소를 넣으세요! (뒤에 /analyze 포함)
+// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
 
@@ -77,10 +119,13 @@ snapBtn.addEventListener("click", async () => {
 
   if (!stream) { startCamera(); return; }
   
-  snapBtn.textContent = "Processing...";
+  snapBtn.textContent = "ANALYZING...";
   snapBtn.disabled = true;
 
-  // 캡쳐 (좌우반전)
+  // 1. 버튼 누르는 순간 시각적 피드백 (먼저 폭발시킴)
+  triggerExplosion(); 
+
+  // 캡쳐
   ctx.save();
   ctx.scale(-1, 1);
   ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
@@ -98,7 +143,8 @@ snapBtn.addEventListener("click", async () => {
       const data = await res.json();
       
       if (data.status === "ok") {
-        info.textContent = "감정이 당신의 형상을 변화시킵니다.";
+        info.textContent = "감정 데이터가 형상을 재구성합니다.";
+        // 2. 데이터 도착하면 입자들이 모여들기 시작
         updateParticles(data);
       } else if (data.status === "no_face") {
         info.textContent = "얼굴을 찾을 수 없습니다.";
@@ -115,24 +161,23 @@ snapBtn.addEventListener("click", async () => {
 
 function resetBtn() {
   snapBtn.disabled = false;
-  snapBtn.textContent = "📸 형상화 (Capture)";
+  snapBtn.textContent = "📸 CAPTURE";
 }
 
 
-/* ================= 2. Three.js: Digital Soul Mirror ================= */
+/* ================= 2. Three.js: Dynamic Mirror ================= */
 let scene, camera, renderer, points;
 let particlesData = []; 
-const PARTICLE_COUNT = 5000; // 입자 수 (많을수록 정밀하지만 느려짐)
+const PARTICLE_COUNT = 5500; // 입자 수 약간 증가
 
-// 상태 변수
 let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
 let hasFace = false;
+let flashIntensity = 0.0; // 캡쳐 시 번쩍이는 효과용
 
 function initThree() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050505); // 딥 다크 배경
+  scene.background = new THREE.Color(0x050505);
 
-  // 카메라 설정
   const aspect = window.innerWidth / window.innerHeight;
   camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
   camera.position.z = 400; 
@@ -142,42 +187,38 @@ function initThree() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.getElementById("container").appendChild(renderer.domElement);
 
-  // 입자 초기화 (랜덤한 위치에 먼지처럼 배치)
   const posArray = new Float32Array(PARTICLE_COUNT * 3);
   const colorArray = new Float32Array(PARTICLE_COUNT * 3);
 
   for(let i=0; i<PARTICLE_COUNT; i++) {
-    // 화면 전체에 퍼져있는 초기 상태
-    const x = (Math.random() - 0.5) * 800;
-    const y = (Math.random() - 0.5) * 800;
-    const z = (Math.random() - 0.5) * 400;
+    // 초기: 랜덤 확산 상태
+    const x = (Math.random() - 0.5) * 900;
+    const y = (Math.random() - 0.5) * 900;
+    const z = (Math.random() - 0.5) * 500;
     
     posArray[i*3] = x;
     posArray[i*3+1] = y;
     posArray[i*3+2] = z;
 
     particlesData.push({
-      ox: x, oy: y, oz: z, // 원래(흩어진) 위치
-      tx: x, ty: y, tz: z, // 목표 위치 (처음엔 자기 위치)
-      speed: 0.03 + Math.random() * 0.05 // 이동 속도 랜덤
+      ox: x, oy: y, oz: z, // Reset 위치
+      tx: x, ty: y, tz: z, // Target 위치
+      vx: 0, vy: 0, vz: 0, // 물리 속도 (Velocity) - 다이나믹함의 핵심
+      speed: 0.05
     });
 
-    // 기본 색상: 딤 그레이
-    colorArray[i*3] = 0.3; 
-    colorArray[i*3+1] = 0.3; 
-    colorArray[i*3+2] = 0.3;
+    colorArray[i*3] = 0.3; colorArray[i*3+1] = 0.3; colorArray[i*3+2] = 0.3;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
-  // 입자 재질 (빛나는 점)
   const material = new THREE.PointsMaterial({
-    size: 2.5,
+    size: 2.8,
     vertexColors: true,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.9,
     blending: THREE.AdditiveBlending,
     sizeAttenuation: true
   });
@@ -192,7 +233,33 @@ function initThree() {
   });
 }
 
-// 데이터 수신 후 입자 목표 위치 설정
+// [핵심 기능] 버튼 누르면 입자 폭발 (Reset & Shock)
+function triggerExplosion() {
+  const positions = points.geometry.attributes.position.array;
+  
+  // 화면 번쩍
+  flashIntensity = 1.0; 
+
+  for(let i=0; i<PARTICLE_COUNT; i++) {
+    const p = particlesData[i];
+    
+    // 현재 위치에서 밖으로 확 튕겨나가는 힘을 줌
+    const dirX = (Math.random() - 0.5);
+    const dirY = (Math.random() - 0.5);
+    const dirZ = (Math.random() - 0.5);
+    
+    // 강한 충격량 (Impulse)
+    p.vx = dirX * 150; 
+    p.vy = dirY * 150; 
+    p.vz = dirZ * 150;
+    
+    // 타겟을 일시적으로 랜덤으로 돌림 (혼돈)
+    p.tx = p.ox; 
+    p.ty = p.oy; 
+    p.tz = p.oz;
+  }
+}
+
 function updateParticles(data) {
   if (!data.landmarks || !data.face_rect) return;
   
@@ -200,44 +267,40 @@ function updateParticles(data) {
   currentEmotions = data.emotions;
 
   const rect = data.face_rect;
-  // 얼굴 중심점
   const centerX = (rect.min_x + rect.max_x) / 2;
   const centerY = (rect.min_y + rect.max_y) / 2;
   
-  // 랜드마크 좌표계 변환 (이미지 2D -> 3D 월드)
   const landmarks3D = data.landmarks.map(lm => {
     return {
-      x: (lm.x - centerX) * 1.2,   // 스케일 키움 (화면에 꽉 차게)
-      y: -(lm.y - centerY) * 1.2,  // Y축 반전
+      x: (lm.x - centerX) * 1.3,
+      y: -(lm.y - centerY) * 1.3,
       z: lm.z || 0
     };
   });
 
-  // 입자들을 랜드마크 위치로 배정
   particlesData.forEach((p, i) => {
-    // 랜드마크 개수만큼 순환하며 할당
     const targetLm = landmarks3D[i % landmarks3D.length];
     
-    // 목표 위치: 랜드마크 근처 + 약간의 랜덤 확산 (면처럼 보이게)
-    p.tx = targetLm.x + (Math.random() - 0.5) * 10;
-    p.ty = targetLm.y + (Math.random() - 0.5) * 10;
+    // 새로운 목표 설정 (얼굴 형상)
+    p.tx = targetLm.x + (Math.random() - 0.5) * 12;
+    p.ty = targetLm.y + (Math.random() - 0.5) * 12;
+    p.tz = (targetLm.z * 3) + (Math.random() - 0.5) * 15;
     
-    // Z축(깊이)은 얼굴 입체감 + 랜덤
-    p.tz = (targetLm.z * 3) + (Math.random() - 0.5) * 10; 
+    // [중요] 모일 때 속도를 다시 빠르게 해서 '빨려 들어가는' 느낌 줌
+    p.speed = 0.08 + Math.random() * 0.05; 
   });
 }
 
-// 얼굴 없으면 흩어지기
 function disperseParticles() {
   hasFace = false;
   particlesData.forEach(p => {
-    p.tx = p.ox;
-    p.ty = p.oy;
-    p.tz = p.oz;
+    p.tx = p.ox; p.ty = p.oy; p.tz = p.oz;
+    // 흩어질 때도 살짝 튕기게
+    p.vx += (Math.random()-0.5) * 10;
+    p.vy += (Math.random()-0.5) * 10;
   });
 }
 
-// 애니메이션 루프
 function animate() {
   requestAnimationFrame(animate);
 
@@ -247,57 +310,55 @@ function animate() {
   const { joy, sorrow, anger, surprise } = currentEmotions;
   const time = Date.now() * 0.001;
 
-  // 감정별 목표 색상
-  let tr = 0.5, tg = 0.6, tb = 0.7; // 평소: 차가운 금속성 느낌
-  
+  // 번쩍이는 효과 서서히 감소
+  if(flashIntensity > 0) flashIntensity *= 0.9;
+
+  let tr = 0.5, tg = 0.6, tb = 0.7; 
   if (hasFace) {
-    // 감정이 섞임
-    if (joy > 0.1) { tr=1.0; tg=0.8; tb=0.2; } // Joy: Gold
-    if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; } // Anger: Red
-    if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=1.0; } // Sorrow: Blue
-    if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; } // Surprise: White
+    if (joy > 0.1) { tr=1.0; tg=0.8; tb=0.2; }
+    if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; }
+    if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=1.0; }
+    if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; }
   }
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const p = particlesData[i];
     const idx = i * 3;
 
-    // 현재 위치
     let cx = positions[idx];
     let cy = positions[idx+1];
     let cz = positions[idx+2];
 
-    // 목표 위치 가져오기
-    let tx = p.tx;
-    let ty = p.ty;
-    let tz = p.tz;
+    // 1. 물리 속도 (Velocity) 적용
+    // 폭발할 때 생긴 vx, vy, vz가 위치를 밀어냄
+    cx += p.vx;
+    cy += p.vy;
+    cz += p.vz;
+    
+    // 속도는 마찰력에 의해 점점 줄어듦 (Damping)
+    p.vx *= 0.9;
+    p.vy *= 0.9;
+    p.vz *= 0.9;
 
-    // --- [물리적 변형 효과] ---
+    // 2. 목표 위치로 이동 (Lerp)
+    // 감정에 따른 추가 변형
+    let tx = p.tx; let ty = p.ty; let tz = p.tz;
+
     if (hasFace) {
-      // 1. 슬픔: 흘러내림 (Melt)
       if (sorrow > 0.1) {
-        // 사인파 모양으로 뚝뚝 떨어짐
-        const drop = Math.abs(Math.sin(time * 2 + cx * 0.05)) * sorrow * 40;
-        ty -= drop; 
-        p.speed = 0.02; // 무겁게 움직임
+        ty -= Math.abs(Math.sin(time * 2 + cx * 0.05)) * sorrow * 40;
       }
-
-      // 2. 기쁨: 상승 및 부유 (Float)
       if (joy > 0.1) {
         ty += Math.sin(time * 3 + cx * 0.1) * joy * 10;
         tx += Math.cos(time * 2 + cy * 0.1) * joy * 5;
-        p.speed = 0.08; // 가볍고 빠르게
       }
-
-      // 3. 분노: 노이즈 진동 (Shake)
       if (anger > 0.1) {
         tx += (Math.random() - 0.5) * anger * 20;
         ty += (Math.random() - 0.5) * anger * 20;
-        p.speed = 0.15; // 아주 빠르고 거칠게
       }
     }
 
-    // 위치 업데이트 (Lerp: 현재 -> 목표)
+    // 목표 위치로 부드럽게 끌려감
     cx += (tx - cx) * p.speed;
     cy += (ty - cy) * p.speed;
     cz += (tz - cz) * p.speed;
@@ -306,20 +367,14 @@ function animate() {
     positions[idx+1] = cy;
     positions[idx+2] = cz;
 
-    // 색상 업데이트 (Lerp)
-    colors[idx] += (tr - colors[idx]) * 0.05;
-    colors[idx+1] += (tg - colors[idx+1]) * 0.05;
-    colors[idx+2] += (tb - colors[idx+2]) * 0.05;
+    // 색상 업데이트 (번쩍이는 효과 flashIntensity 추가)
+    colors[idx] += (tr - colors[idx]) * 0.05 + flashIntensity;
+    colors[idx+1] += (tg - colors[idx+1]) * 0.05 + flashIntensity;
+    colors[idx+2] += (tb - colors[idx+2]) * 0.05 + flashIntensity;
   }
 
-  // 전체 씬 회전 (살짝살짝 움직여 입체감 부여)
-  if (hasFace) {
-    // 얼굴이 있을 땐 아주 천천히 숨쉬듯
-    points.rotation.y = Math.sin(time * 0.5) * 0.05;
-  } else {
-    // 대기 상태에선 천천히 돔
-    points.rotation.y += 0.0005;
-  }
+  if (hasFace) points.rotation.y = Math.sin(time * 0.5) * 0.05;
+  else points.rotation.y += 0.001;
 
   points.geometry.attributes.position.needsUpdate = true;
   points.geometry.attributes.color.needsUpdate = true;
