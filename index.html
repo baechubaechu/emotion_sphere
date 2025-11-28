@@ -1,118 +1,3 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Digital Aura Kiosk</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
-    
-    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
-    
-    /* ================= 화면 1: 카메라 모드 ================= */
-    #camera-screen {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 20; 
-      display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-      padding-bottom: 50px;
-      background: rgba(0, 0, 0, 0.4); 
-      transition: opacity 0.8s ease; 
-    }
-
-    #camera-wrapper {
-      position: relative;
-      width: 280px; height: 360px;
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      background: #000; 
-      overflow: hidden;
-      margin-bottom: 30px;
-      box-shadow: 0 0 30px rgba(0,0,0,0.8);
-      border-radius: 4px;
-    }
-    
-    #cam {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      transform: scaleX(-1);
-      opacity: 0.9;
-    }
-
-    #face-guide {
-        position: absolute;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        width: 60%; height: 45%;
-        border: 2px dashed rgba(255, 255, 255, 0.6);
-        border-radius: 50% / 60%;
-        box-shadow: 0 0 0 100vmax rgba(0,0,0,0.6); 
-    }
-    
-    #snapBtn {
-      pointer-events: auto;
-      background: rgba(255, 255, 255, 0.9);
-      color: #000; 
-      border: none;
-      padding: 18px 60px; border-radius: 50px;
-      font-size: 16px; font-weight: bold; letter-spacing: 2px;
-      cursor: pointer;
-      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
-      transition: transform 0.2s;
-    }
-    #snapBtn:active { transform: scale(0.95); }
-
-
-    /* ================= 화면 2: 결과 모드 ================= */
-    #result-ui {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 10;
-      pointer-events: none;
-      display: none; 
-      flex-direction: column; justify-content: flex-end; align-items: center;
-      padding-bottom: 50px;
-    }
-
-    #info-text {
-      position: absolute; top: 50px; width: 100%;
-      text-align: center; color: rgba(255,255,255,0.7);
-      font-size: 14px; letter-spacing: 1px;
-      text-shadow: 0 2px 5px rgba(0,0,0,1);
-    }
-
-    #retryBtn {
-      pointer-events: auto;
-      padding: 15px 40px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      color: #fff; border-radius: 30px;
-      font-size: 14px; backdrop-filter: blur(5px);
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    #retryBtn:hover { background: rgba(255, 255, 255, 0.25); }
-
-    .hidden { opacity: 0; pointer-events: none; }
-    #snap { display: none; } 
-  </style>
-</head>
-<body>
-
-<div id="container"></div>
-
-<div id="camera-screen">
-  <div id="camera-wrapper">
-    <video id="cam" autoplay playsinline muted></video>
-    <div id="face-guide"></div>
-  </div>
-  <button id="snapBtn">SCAN AURA</button>
-</div>
-
-<div id="result-ui">
-  <div id="info-text">데이터 해석 중...</div>
-  <button id="retryBtn">↺ 다시 하기</button>
-</div>
-
-<canvas id="snap" width="640" height="480"></canvas>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/josephg/noisejs/perlin.js"></script>
 
@@ -126,37 +11,42 @@ const resultUi = document.getElementById("result-ui");
 const infoText = document.getElementById("info-text");
 const snapBtn = document.getElementById("snapBtn");
 const retryBtn = document.getElementById("retryBtn");
+const videoElement = document.getElementById("cam"); // 비디오 요소 변수화
 
 let stream = null;
 
 async function startCamera() {
-  const video = document.getElementById("cam");
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-    video.srcObject = stream;
+    videoElement.srcObject = stream;
+    // 확실하게 재생 시작
+    videoElement.play().catch(e => console.log("재생 오류:", e));
   } catch (e) { alert("카메라 권한 필요"); }
 }
 window.addEventListener("load", startCamera);
 
-// 촬영 버튼
+// [촬영 버튼]
 snapBtn.addEventListener("click", async () => {
   if (!stream) { startCamera(); return; }
 
-  // 화면 전환
+  // 1. 화면 전환 (카메라 숨김 -> 결과 보임)
   cameraScreen.classList.add("hidden"); 
-  setTimeout(() => { resultUi.style.display = "flex"; }, 500);
+  
+  // 0.5초 뒤에 결과창 띄우기 (애니메이션 시간 고려)
+  setTimeout(() => { 
+    resultUi.style.display = "flex"; 
+  }, 500);
 
   infoText.textContent = "에너지가 변화하고 있습니다...";
   setAnalyzingState(true);
 
   // 캡쳐
-  const video = document.getElementById("cam");
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
   
   ctx.save();
   ctx.scale(-1, 1);
-  ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+  ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
   canvas.toBlob(async blob => {
@@ -171,9 +61,7 @@ snapBtn.addEventListener("click", async () => {
       if (data.status === "ok") {
         infoText.textContent = ""; 
         updateAura(data);
-        
-        // [중요] 결과가 나오면 타이머 시작!
-        startIdleTimer(); 
+        startIdleTimer(); // 타이머 시작
       } else {
         infoText.textContent = "인식 실패. 다시 시도하세요.";
       }
@@ -186,25 +74,35 @@ snapBtn.addEventListener("click", async () => {
   }, "image/jpeg", 0.9);
 });
 
-// 다시 하기 기능 (함수로 분리)
+// [핵심 수정] 다시 하기 기능
 function resetToCameraMode() {
+  // 1. 결과창 즉시 숨김
   resultUi.style.display = "none";
+  
+  // 2. 카메라 화면 보이게 (hidden 클래스 제거)
   cameraScreen.classList.remove("hidden");
-  setBackgroundState(); // 오라를 배경모드로
-  stopIdleTimer(); // 타이머 해제
+  
+  // 3. [중요] 비디오 강제 재생 (태블릿 버그 방지)
+  if(videoElement) {
+      videoElement.play().catch(e => console.log("비디오 깨우기 실패:", e));
+  }
+
+  // 4. 오라 상태 변경 (배경으로 깔기)
+  setBackgroundState(); 
+  
+  // 5. 타이머 해제
+  stopIdleTimer(); 
 }
 
-// 다시 하기 버튼 클릭
 retryBtn.addEventListener("click", resetToCameraMode);
 
 
-/* ================= 2. [추가] 자동 초기화 (Idle Timer) ================= */
+/* ================= 2. 자동 초기화 (Idle Timer) ================= */
 let idleTimer = null;
-const IDLE_LIMIT = 60000; // 60초 (1000ms * 60)
+const IDLE_LIMIT = 60000; // 60초
 
 function startIdleTimer() {
-  stopIdleTimer(); // 기존 타이머 제거
-  // 60초 뒤에 resetToCameraMode 실행
+  stopIdleTimer(); 
   idleTimer = setTimeout(() => {
     console.log("Auto Reset Triggered");
     resetToCameraMode();
@@ -218,15 +116,12 @@ function stopIdleTimer() {
   }
 }
 
-// 사용자가 화면을 터치하거나 마우스를 움직이면 타이머 리셋
 function resetTimerOnInteraction() {
-  // 결과 화면이 켜져 있을 때만 동작
   if (resultUi.style.display !== "none") {
     startIdleTimer();
   }
 }
 
-// 이벤트 리스너 등록 (클릭, 터치, 마우스 이동 시 타이머 초기화)
 window.addEventListener("click", resetTimerOnInteraction);
 window.addEventListener("touchstart", resetTimerOnInteraction);
 window.addEventListener("mousemove", resetTimerOnInteraction);
@@ -309,6 +204,8 @@ function initThree() {
 
 function resetParticle(idx, positions) {
   const i3 = idx * 3;
+  
+  // 배경 모드(0.3)거나 활성 모드(0.9)일 때만 생성
   if (targetOpacity > 0.1) { 
     const spread = 20; 
     positions[i3] = (Math.random() - 0.5) * spread;
@@ -340,7 +237,7 @@ function setAnalyzingState(isAnalyzing) {
 }
 
 function setBackgroundState() {
-  targetOpacity = 0.3; 
+  targetOpacity = 0.3; // 배경으로 은은하게
   targetSpeed = 0.5; 
 }
 
@@ -410,6 +307,5 @@ function animate() {
 
 initThree();
 animate();
+
 </script>
-</body>
-</html>
