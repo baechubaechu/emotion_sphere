@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Digital Soul Mirror</title>
+  <title>Digital Aura</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; user-select: none; }
     
+    /* Three.js 배경 canvas */
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
     
     /* UI 레이어 */
@@ -18,59 +19,55 @@
     }
     
     #info {
-      position: absolute; top: 30px; width: 100%;
-      color: rgba(255,255,255,0.6); font-size: 14px; text-align: center;
-      text-shadow: 0 0 5px rgba(0,0,0,0.8); letter-spacing: 1px;
+      position: absolute; top: 40px; width: 80%;
+      color: rgba(255,255,255,0.7); font-size: 15px; text-align: center;
+      text-shadow: 0 2px 10px rgba(0,0,0,1); letter-spacing: 1px;
+      background: rgba(0,0,0,0.3); padding: 10px; border-radius: 20px;
     }
 
-    /* 1. 카메라 미리보기 창 (원형) */
-    #camera-frame {
-      width: 120px; height: 120px;
-      border-radius: 50%;
-      border: 2px solid rgba(255, 255, 255, 0.2);
+    /* === [요청하신 네모 카메라 UI 복구] === */
+    #camera-wrapper {
+      position: relative;
+      width: 280px; height: 360px; /* 네모난 비율 */
+      border: 1px solid rgba(255, 255, 255, 0.3);
       background: #000;
       overflow: hidden;
-      margin-bottom: 20px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      position: relative;
-      pointer-events: auto; /* 터치 가능 */
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      pointer-events: auto;
+      border-radius: 4px;
     }
     
     #cam {
       width: 100%; height: 100%;
       object-fit: cover;
       transform: scaleX(-1); /* 거울모드 */
-      opacity: 0.8;
+      opacity: 0.7;
     }
 
-    /* 스캔 라인 효과 (카메라 위) */
-    #scan-line {
-      position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-      background: rgba(0, 255, 255, 0.8);
-      box-shadow: 0 0 10px cyan;
-      animation: scan 2s infinite linear;
-    }
-    @keyframes scan {
-      0% { top: 0%; opacity: 0; }
-      10% { opacity: 1; }
-      90% { opacity: 1; }
-      100% { top: 100%; opacity: 0; }
+    /* 얼굴 가이드라인 (네모 박스 + 타원) */
+    #face-guide {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60%; height: 45%;
+        border: 2px dashed rgba(255, 255, 255, 0.5);
+        border-radius: 50% / 60%; /* 타원형 */
+        box-shadow: 0 0 0 100vmax rgba(0,0,0,0.4); /* 주변 어둡게 */
     }
     
     #snapBtn {
       pointer-events: auto;
-      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: #fff; padding: 16px 40px; border-radius: 50px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #fff; padding: 18px 60px; border-radius: 2px;
       font-size: 16px; backdrop-filter: blur(10px);
-      transition: all 0.2s ease; cursor: pointer; text-transform: uppercase; letter-spacing: 2px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      transition: all 0.3s ease; cursor: pointer; text-transform: uppercase; letter-spacing: 3px;
     }
-    #snapBtn:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); color: cyan; border-color: cyan; }
-    #snapBtn:active { transform: scale(0.95); }
-    #snapBtn:disabled { opacity: 0.5; transform: scale(1); cursor: wait; border-color: #555; color: #aaa; }
+    #snapBtn:hover { background: rgba(255, 255, 255, 0.3); letter-spacing: 5px; }
+    #snapBtn:active { transform: scale(0.98); }
+    #snapBtn:disabled { opacity: 0.6; cursor: not-allowed; letter-spacing: 3px; }
 
-    /* 캡쳐용 캔버스 (숨김) */
     #snap { display: none; } 
   </style>
 </head>
@@ -79,26 +76,25 @@
 <div id="container"></div>
 
 <div id="ui-layer">
-  <div id="info">나의 형상이 데이터 입자로 재구성됩니다.</div>
+  <div id="info">당신의 에너지를 시각화합니다.</div>
   
-  <div id="camera-frame">
+  <div id="camera-wrapper">
     <video id="cam" autoplay playsinline muted></video>
-    <div id="scan-line"></div>
+    <div id="face-guide"></div>
   </div>
 
-  <button id="snapBtn">📸 CAPTURE</button>
+  <button id="snapBtn">SCAN AURA</button>
 </div>
 
 <canvas id="snap" width="640" height="480"></canvas>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/josephg/noisejs/perlin.js"></script>
 
 <script>
-// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
-
-/* ================= 1. 카메라 로직 ================= */
+/* ================= 1. 카메라 로직 (변경 없음) ================= */
 let stream = null;
 const snapBtn = document.getElementById("snapBtn");
 const info = document.getElementById("info");
@@ -106,9 +102,9 @@ const info = document.getElementById("info");
 async function startCamera() {
   const video = document.getElementById("cam");
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
     video.srcObject = stream;
-  } catch (e) { info.textContent = "카메라 권한이 필요합니다."; }
+  } catch (e) { info.textContent = "카메라 접근 불가"; }
 }
 window.addEventListener("load", startCamera);
 
@@ -119,13 +115,9 @@ snapBtn.addEventListener("click", async () => {
 
   if (!stream) { startCamera(); return; }
   
-  snapBtn.textContent = "ANALYZING...";
+  snapBtn.textContent = "SCANNING...";
   snapBtn.disabled = true;
 
-  // 1. 버튼 누르는 순간 시각적 피드백 (먼저 폭발시킴)
-  triggerExplosion(); 
-
-  // 캡쳐
   ctx.save();
   ctx.scale(-1, 1);
   ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
@@ -139,20 +131,18 @@ snapBtn.addEventListener("click", async () => {
     try {
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Server Error");
-      
       const data = await res.json();
       
       if (data.status === "ok") {
-        info.textContent = "감정 데이터가 형상을 재구성합니다.";
-        // 2. 데이터 도착하면 입자들이 모여들기 시작
-        updateParticles(data);
-      } else if (data.status === "no_face") {
-        info.textContent = "얼굴을 찾을 수 없습니다.";
-        disperseParticles();
+        info.textContent = "감정 에너지가 방출됩니다.";
+        updateAura(data); // 새로운 시각화 함수 호출
+      } else {
+        info.textContent = "대상 없음. 대기 상태로 전환.";
+        resetAura();
       }
     } catch (e) { 
       console.error(e); 
-      info.textContent = "서버 연결 실패"; 
+      info.textContent = "연결 실패"; 
     } finally { 
       resetBtn(); 
     }
@@ -161,65 +151,66 @@ snapBtn.addEventListener("click", async () => {
 
 function resetBtn() {
   snapBtn.disabled = false;
-  snapBtn.textContent = "📸 CAPTURE";
+  snapBtn.textContent = "SCAN AURA";
 }
 
 
-/* ================= 2. Three.js: Dynamic Mirror ================= */
+/* ================= 2. Three.js: Abstract Energy Flow ================= */
 let scene, camera, renderer, points;
+const PARTICLE_COUNT = 8000; // 입자 수 증가 (더 부드러운 연기처럼)
 let particlesData = []; 
-const PARTICLE_COUNT = 5500; // 입자 수 약간 증가
 
+// 상태 변수
 let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
+let faceCenter = new THREE.Vector3(0, 0, 0); // 얼굴 중심점
 let hasFace = false;
-let flashIntensity = 0.0; // 캡쳐 시 번쩍이는 효과용
+let time = 0;
+
+// 노이즈 설정 (자연스러운 흐름)
+noise.seed(Math.random());
 
 function initThree() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050505);
+  scene.background = new THREE.Color(0x020202); // 거의 완전한 블랙
 
-  const aspect = window.innerWidth / window.innerHeight;
-  camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
   camera.position.z = 400; 
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true }); // 성능을 위해 antialias 끔
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   document.getElementById("container").appendChild(renderer.domElement);
 
+  // 초기 입자 생성 (화면 하단에서 생성)
   const posArray = new Float32Array(PARTICLE_COUNT * 3);
   const colorArray = new Float32Array(PARTICLE_COUNT * 3);
 
   for(let i=0; i<PARTICLE_COUNT; i++) {
-    // 초기: 랜덤 확산 상태
-    const x = (Math.random() - 0.5) * 900;
-    const y = (Math.random() - 0.5) * 900;
-    const z = (Math.random() - 0.5) * 500;
-    
-    posArray[i*3] = x;
-    posArray[i*3+1] = y;
-    posArray[i*3+2] = z;
+    resetParticle(i, posArray, true); // 초기 랜덤 배치
 
+    // 입자별 고유 속성
     particlesData.push({
-      ox: x, oy: y, oz: z, // Reset 위치
-      tx: x, ty: y, tz: z, // Target 위치
-      vx: 0, vy: 0, vz: 0, // 물리 속도 (Velocity) - 다이나믹함의 핵심
-      speed: 0.05
+      vx: 0, vy: 0, vz: 0, // 속도
+      life: Math.random(), // 수명 (0~1)
+      maxLife: 0.5 + Math.random() * 0.5, // 최대 수명
+      seed: Math.random() * 100 // 노이즈 시드값
     });
 
-    colorArray[i*3] = 0.3; colorArray[i*3+1] = 0.3; colorArray[i*3+2] = 0.3;
+    colorArray[i*3] = 0.2; colorArray[i*3+1] = 0.2; colorArray[i*3+2] = 0.3;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
+  // 재질: 부드러운 연기 느낌
   const material = new THREE.PointsMaterial({
-    size: 2.8,
+    size: 4.0,
     vertexColors: true,
     transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
+    opacity: 0.6,
+    blending: THREE.AdditiveBlending, // 빛 겹침 효과
+    depthWrite: false, // 투명 객체 겹칠 때 문제 해결
     sizeAttenuation: true
   });
 
@@ -233,36 +224,39 @@ function initThree() {
   });
 }
 
-// [핵심 기능] 버튼 누르면 입자 폭발 (Reset & Shock)
-function triggerExplosion() {
-  const positions = points.geometry.attributes.position.array;
-  
-  // 화면 번쩍
-  flashIntensity = 1.0; 
+// 입자를 바닥(혹은 얼굴 중심)에서 리셋하는 함수
+function resetParticle(idx, positions, initial=false) {
+  const i3 = idx * 3;
+  let x, y, z;
 
-  for(let i=0; i<PARTICLE_COUNT; i++) {
-    const p = particlesData[i];
-    
-    // 현재 위치에서 밖으로 확 튕겨나가는 힘을 줌
-    const dirX = (Math.random() - 0.5);
-    const dirY = (Math.random() - 0.5);
-    const dirZ = (Math.random() - 0.5);
-    
-    // 강한 충격량 (Impulse)
-    p.vx = dirX * 150; 
-    p.vy = dirY * 150; 
-    p.vz = dirZ * 150;
-    
-    // 타겟을 일시적으로 랜덤으로 돌림 (혼돈)
-    p.tx = p.ox; 
-    p.ty = p.oy; 
-    p.tz = p.oz;
+  if (initial || !hasFace) {
+    // 얼굴 없을 땐 화면 하단에서 넓게 퍼져 올라옴
+    x = (Math.random() - 0.5) * window.innerWidth;
+    y = -window.innerHeight * 0.5;
+    z = (Math.random() - 0.5) * 200;
+  } else {
+    // 얼굴 있을 땐 얼굴 중심 근처에서 생성 (에너지 방출)
+    const spread = 50;
+    x = faceCenter.x + (Math.random() - 0.5) * spread;
+    y = faceCenter.y + (Math.random() - 0.5) * spread;
+    z = faceCenter.z + (Math.random() - 0.5) * spread;
+  }
+  
+  positions[i3] = x;
+  positions[i3+1] = y;
+  positions[i3+2] = z;
+
+  if (particlesData[idx]) {
+    particlesData[idx].life = 0;
+    particlesData[idx].vx = 0;
+    particlesData[idx].vy = 0;
+    particlesData[idx].vz = 0;
   }
 }
 
-function updateParticles(data) {
+// 데이터 업데이트 (얼굴 중심점 계산)
+function updateAura(data) {
   if (!data.landmarks || !data.face_rect) return;
-  
   hasFace = true;
   currentEmotions = data.emotions;
 
@@ -270,115 +264,113 @@ function updateParticles(data) {
   const centerX = (rect.min_x + rect.max_x) / 2;
   const centerY = (rect.min_y + rect.max_y) / 2;
   
-  const landmarks3D = data.landmarks.map(lm => {
-    return {
-      x: (lm.x - centerX) * 1.3,
-      y: -(lm.y - centerY) * 1.3,
-      z: lm.z || 0
-    };
-  });
-
-  particlesData.forEach((p, i) => {
-    const targetLm = landmarks3D[i % landmarks3D.length];
-    
-    // 새로운 목표 설정 (얼굴 형상)
-    p.tx = targetLm.x + (Math.random() - 0.5) * 12;
-    p.ty = targetLm.y + (Math.random() - 0.5) * 12;
-    p.tz = (targetLm.z * 3) + (Math.random() - 0.5) * 15;
-    
-    // [중요] 모일 때 속도를 다시 빠르게 해서 '빨려 들어가는' 느낌 줌
-    p.speed = 0.08 + Math.random() * 0.05; 
-  });
+  // 이미지 좌표 -> 3D 월드 좌표 변환 (대략적 스케일링)
+  faceCenter.set(
+    (centerX - 320) * 1.5,
+    -(centerY - 240) * 1.5 + 100, // 조금 위로 올림
+    0
+  );
 }
 
-function disperseParticles() {
+function resetAura() {
   hasFace = false;
-  particlesData.forEach(p => {
-    p.tx = p.ox; p.ty = p.oy; p.tz = p.oz;
-    // 흩어질 때도 살짝 튕기게
-    p.vx += (Math.random()-0.5) * 10;
-    p.vy += (Math.random()-0.5) * 10;
-  });
 }
 
+// 애니메이션 루프 (핵심: 유체 흐름 시뮬레이션)
 function animate() {
   requestAnimationFrame(animate);
 
   const positions = points.geometry.attributes.position.array;
   const colors = points.geometry.attributes.color.array;
-  
   const { joy, sorrow, anger, surprise } = currentEmotions;
-  const time = Date.now() * 0.001;
+  
+  time += 0.005; // 시간 흐름
 
-  // 번쩍이는 효과 서서히 감소
-  if(flashIntensity > 0) flashIntensity *= 0.9;
+  // 감정별 목표 색상 및 물리 파라미터
+  let tr=0.2, tg=0.3, tb=0.4; // 기본색 (어두운 청록)
+  let upwardForce = 0.2;      // 상승력
+  let turbulence = 0.5;       // 난류 강도 (노이즈)
+  let speedMult = 1.0;        // 전체 속도 배수
 
-  let tr = 0.5, tg = 0.6, tb = 0.7; 
   if (hasFace) {
-    if (joy > 0.1) { tr=1.0; tg=0.8; tb=0.2; }
-    if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; }
-    if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=1.0; }
-    if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; }
+    if (joy > 0.1) { 
+      tr=1.0; tg=0.9; tb=0.3; // Gold
+      upwardForce = 0.8 + joy; // 강하게 상승
+      turbulence = 1.0;
+      speedMult = 1.5;
+    }
+    if (anger > 0.1) { 
+      tr=1.0; tg=0.1; tb=0.1; // Red
+      upwardForce = 0.3;
+      turbulence = 3.0 + anger * 2; // 매우 거친 난류
+      speedMult = 2.0;
+    }
+    if (sorrow > 0.1) { 
+      tr=0.1; tg=0.2; tb=0.8; // Deep Blue
+      upwardForce = 0.05; // 거의 상승하지 않고 무거움
+      turbulence = 0.2;   // 잔잔하게 소용돌이
+      speedMult = 0.5;
+    }
   }
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const p = particlesData[i];
     const idx = i * 3;
 
+    // 수명 관리
+    p.life += 0.005 * speedMult;
+    if (p.life > p.maxLife) {
+      resetParticle(i, positions); // 수명 다하면 리셋
+    }
+
     let cx = positions[idx];
     let cy = positions[idx+1];
     let cz = positions[idx+2];
 
-    // 1. 물리 속도 (Velocity) 적용
-    // 폭발할 때 생긴 vx, vy, vz가 위치를 밀어냄
-    cx += p.vx;
-    cy += p.vy;
-    cz += p.vz;
+    // --- [물리 엔진: 유체 흐름] ---
     
-    // 속도는 마찰력에 의해 점점 줄어듦 (Damping)
-    p.vx *= 0.9;
-    p.vy *= 0.9;
-    p.vz *= 0.9;
+    // 1. Perlin Noise를 이용한 자연스러운 흐름장 생성
+    // 공간 좌표(cx, cy, cz)와 시간(time)에 따라 방향이 부드럽게 변함
+    const noiseScale = 0.005;
+    const nX = noise.simplex3(cx * noiseScale, cy * noiseScale, time + p.seed);
+    const nY = noise.simplex3(cx * noiseScale, cy * noiseScale + 100, time + p.seed);
+    const nZ = noise.simplex3(cx * noiseScale, cy * noiseScale + 200, time + p.seed);
 
-    // 2. 목표 위치로 이동 (Lerp)
-    // 감정에 따른 추가 변형
-    let tx = p.tx; let ty = p.ty; let tz = p.tz;
+    // 2. 속도에 노이즈 힘 적용 (Turbulence)
+    p.vx += nX * turbulence * 0.05;
+    p.vy += nY * turbulence * 0.05;
+    p.vz += nZ * turbulence * 0.05;
 
-    if (hasFace) {
-      if (sorrow > 0.1) {
-        ty -= Math.abs(Math.sin(time * 2 + cx * 0.05)) * sorrow * 40;
-      }
-      if (joy > 0.1) {
-        ty += Math.sin(time * 3 + cx * 0.1) * joy * 10;
-        tx += Math.cos(time * 2 + cy * 0.1) * joy * 5;
-      }
-      if (anger > 0.1) {
-        tx += (Math.random() - 0.5) * anger * 20;
-        ty += (Math.random() - 0.5) * anger * 20;
-      }
-    }
+    // 3. 기본 상승력 (Upward Force)
+    p.vy += upwardForce * 0.05;
 
-    // 목표 위치로 부드럽게 끌려감
-    cx += (tx - cx) * p.speed;
-    cy += (ty - cy) * p.speed;
-    cz += (tz - cz) * p.speed;
+    // 4. 속도 감쇠 (Damping - 공기 저항 느낌)
+    p.vx *= 0.96; p.vy *= 0.96; p.vz *= 0.96;
 
-    positions[idx] = cx;
-    positions[idx+1] = cy;
-    positions[idx+2] = cz;
+    // 5. 위치 업데이트
+    positions[idx] += p.vx * speedMult;
+    positions[idx+1] += p.vy * speedMult;
+    positions[idx+2] += p.vz * speedMult;
 
-    // 색상 업데이트 (번쩍이는 효과 flashIntensity 추가)
-    colors[idx] += (tr - colors[idx]) * 0.05 + flashIntensity;
-    colors[idx+1] += (tg - colors[idx+1]) * 0.05 + flashIntensity;
-    colors[idx+2] += (tb - colors[idx+2]) * 0.05 + flashIntensity;
+
+    // --- [색상 및 투명도] ---
+    // 수명에 따라 투명도 조절 (생겨났다 사라지게)
+    const opacity = Math.sin(p.life / p.maxLife * Math.PI); // 0 -> 1 -> 0
+    
+    // 색상 보간 (현재 색 -> 목표 색)
+    colors[idx] += (tr - colors[idx]) * 0.02;
+    colors[idx+1] += (tg - colors[idx+1]) * 0.02;
+    colors[idx+2] += (tb - colors[idx+2]) * 0.02;
+
+    // PointsMaterial은 점 단위 opacity 조절이 어려워 색상 밝기로 대신함
+    // 나중에 쉐이더를 쓰면 더 리얼하지만 지금은 이 정도로 타협
+    colors[idx] *= opacity;
+    colors[idx+1] *= opacity;
+    colors[idx+2] *= opacity;
   }
-
-  if (hasFace) points.rotation.y = Math.sin(time * 0.5) * 0.05;
-  else points.rotation.y += 0.001;
 
   points.geometry.attributes.position.needsUpdate = true;
   points.geometry.attributes.color.needsUpdate = true;
-
   renderer.render(scene, camera);
 }
 
