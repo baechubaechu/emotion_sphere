@@ -3,96 +3,56 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Digital Aura Exhibition</title>
+  <title>Deep Digital Aura</title>
   <style>
-    /* 기본 설정 */
     body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
     
-    /* 배경 컨테이너 */
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
     
-    /* 공통 UI 스타일 */
+    /* 화면 공통 */
     .screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       display: flex; flex-direction: column; justify-content: center; align-items: center;
       transition: opacity 0.5s ease;
       z-index: 10;
-      pointer-events: none; /* 배경 터치 통과 */
+      pointer-events: none;
     }
+    .screen.active { opacity: 1; pointer-events: auto; }
     .screen.hidden { opacity: 0; pointer-events: none; display: none; }
-    .screen.active { opacity: 1; pointer-events: auto; display: flex; }
 
-    /* 버튼 스타일 */
+    /* UI 요소들 */
     button {
-      padding: 15px 40px;
+      padding: 16px 40px;
       border: 1px solid rgba(255, 255, 255, 0.4);
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
       color: #fff; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 4px;
+      cursor: pointer; border-radius: 50px;
       backdrop-filter: blur(5px);
-      transition: all 0.3s;
-      pointer-events: auto;
       text-transform: uppercase;
     }
-    button:hover { background: rgba(255, 255, 255, 0.2); border-color: #fff; }
     button:active { transform: scale(0.95); }
 
-    /* 1. 대기 화면 (Start Screen) */
-    #start-screen { z-index: 30; background: #000; }
-    #startBtn {
-      border: none; background: transparent;
-      font-size: 24px; letter-spacing: 5px;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+    /* 대기 화면 */
+    #start-screen { z-index: 30; background: #000; } 
+    #startBtn { border: none; background: transparent; font-size: 22px; letter-spacing: 4px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-    /* 2. 카메라 화면 (Camera Screen) */
-    #camera-screen {
-      justify-content: flex-end; padding-bottom: 60px;
-      background: rgba(0,0,0,0.3);
-    }
-
+    /* 카메라 화면 */
+    #camera-screen { justify-content: flex-end; padding-bottom: 60px; background: rgba(0,0,0,0.3); }
     #camera-frame {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -60%);
-      width: 300px; height: 300px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: #000;
-      overflow: hidden;
-      box-shadow: 0 0 50px rgba(0,0,0,0.5);
+      position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+      width: 300px; height: 300px; 
+      border: 1px solid rgba(255,255,255,0.3); background: #000; overflow: hidden;
     }
-
-    #cam {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      transform: scaleX(-1); /* 거울모드 */
-      opacity: 0.9;
-    }
-
-    /* 얼굴 가이드 */
+    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.8; }
     #face-guide {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 60%; height: 70%;
-      border: 2px dashed rgba(255, 255, 255, 0.5);
-      border-radius: 50%;
-      box-shadow: 0 0 0 100vmax rgba(0,0,0,0.5);
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 60%; height: 70%; border: 2px dashed rgba(255,255,255,0.5); border-radius: 50%;
     }
-
-    #scanBtn {
-      margin-top: 20px; font-weight: bold; background: #fff; color: #000; border: none;
-      z-index: 50;
-    }
-
-    /* 3. 결과/다시하기 화면 (Retry Screen) */
-    #retry-screen {
-      justify-content: flex-end; padding-bottom: 60px;
-    }
-    #info-text {
-      position: absolute; top: 15%; width: 100%;
-      text-align: center; color: rgba(255,255,255,0.7);
-      font-size: 16px; letter-spacing: 1px;
-    }
+    
+    /* 결과 화면 */
+    #retry-screen { justify-content: flex-end; padding-bottom: 60px; }
+    #info-text { position: absolute; top: 15%; width: 100%; text-align: center; color: rgba(255,255,255,0.7); }
 
     #snap { display: none; }
   </style>
@@ -103,6 +63,7 @@
 
 <div id="start-screen" class="screen active">
   <button id="startBtn">TOUCH TO START</button>
+  <div style="color:#555; font-size:10px; margin-top:10px;">카메라 및 센서 권한 필요</div>
 </div>
 
 <div id="camera-screen" class="screen hidden">
@@ -110,579 +71,294 @@
     <video id="cam" autoplay playsinline muted></video>
     <div id="face-guide"></div>
   </div>
-  <button id="scanBtn">SCAN</button>
+  <button id="scanBtn">SCAN AURA</button>
 </div>
 
 <div id="retry-screen" class="screen hidden">
-  <div id="info-text">데이터를 해석하고 있습니다...</div>
+  <div id="info-text">분석 중...</div>
   <button id="retryBtn">↺ RE-SCAN</button>
 </div>
 
-<canvas id="snap" width="640" height="480"></canvas>
+<canvas id="snap"></canvas>
 
-<!-- perlin noise (noise.simplex3) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/josephg/noisejs/perlin.js"></script>
 
 <script>
-// =======================[ 서버 주소 ]=======================
+// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
-
-// =======================[ 1. 상태 & UI 로직 ]========================
 const startScreen = document.getElementById("start-screen");
 const cameraScreen = document.getElementById("camera-screen");
 const retryScreen = document.getElementById("retry-screen");
-
 const startBtn = document.getElementById("startBtn");
 const scanBtn = document.getElementById("scanBtn");
 const retryBtn = document.getElementById("retryBtn");
 const infoText = document.getElementById("info-text");
-
 const videoElement = document.getElementById("cam");
+
 let stream = null;
 let idleTimer = null;
-const IDLE_LIMIT = 60000; // 1분
+const IDLE_LIMIT = 60000;
 
-// 카메라 초기화
-async function initCamera() {
-  try {
-    console.log("Requesting Camera...");
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: 640, height: 480 }
-    });
-    videoElement.srcObject = stream;
-    await videoElement.play();
-    console.log("Camera started in background.");
-  } catch (e) {
-    console.warn("Autoplay blocked or permission denied. Waiting for user gesture.", e);
+/* ================= [1] 데이터 수집 (화면엔 안보임) ================= */
+let audioContext, analyser, microphone;
+let audioVolume = 0; // 저장용 데이터
+let deviceTilt = 90; // 저장용 데이터
+
+// 1. 오디오 분석 (데이터 수집용)
+function setupAudioAnalysis(stream) {
+  if (!stream.getAudioTracks().length) return;
+  
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioContext.createAnalyser();
+  microphone = audioContext.createMediaStreamSource(stream);
+  microphone.connect(analyser);
+  analyser.fftSize = 256;
+  
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  
+  function measureVolume() {
+    if (!audioContext) return;
+    analyser.getByteFrequencyData(dataArray);
+    let sum = 0;
+    for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+    audioVolume = sum / dataArray.length; // 0~255 사이 값
+    requestAnimationFrame(measureVolume);
+  }
+  measureVolume();
+}
+
+// 2. 기기 기울기 (데이터 수집용)
+function handleOrientation(event) {
+  if (event.beta !== null) {
+    deviceTilt = Math.abs(event.beta);
   }
 }
-window.addEventListener("load", initCamera);
 
-// TOUCH TO START
+// 3. 데이터 패키징 (서버 전송용)
+function collectDeepData() {
+  // 소음 상태 텍스트화
+  let soundStatus = "Quiet";
+  if (audioVolume > 10) soundStatus = "Moderate";
+  if (audioVolume > 30) soundStatus = "Loud";
+
+  // 자세 상태 텍스트화
+  let posture = "Upright";
+  if (deviceTilt < 20) posture = "Lying Down";
+  
+  return {
+    // A. 소리 정보 (저장만 함)
+    sound: {
+      level: audioVolume.toFixed(1),
+      status: soundStatus
+    },
+    // B. 자세 정보 (저장만 함)
+    posture: {
+      tilt_angle: deviceTilt.toFixed(1) + "°",
+      status: posture
+    },
+    // C. 기기 정보
+    device: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform
+    },
+    timestamp: new Date().toString()
+  };
+}
+
+
+/* ================= [2] 시퀀스 로직 ================= */
+
+// 시작 버튼: 권한 획득
 startBtn.addEventListener("click", async () => {
-  if (!stream) {
-    await initCamera();
+  try {
+    // audio: true (소리 데이터 수집을 위해 마이크 켬)
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+    videoElement.srcObject = stream;
+    videoElement.play();
+    
+    // 오디오 분석 시작 (백그라운드에서 값만 읽음)
+    setupAudioAnalysis(stream);
+
+  } catch (e) { alert("카메라/마이크 권한이 필요합니다."); return; }
+
+  // 아이폰용 센서 권한
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(response => {
+        if (response === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+      })
+      .catch(console.error);
+  } else {
+    window.addEventListener('deviceorientation', handleOrientation);
   }
+
   showScreen(cameraScreen);
   resetIdleTimer();
 });
 
-// SCAN
+// 스캔 버튼
 scanBtn.addEventListener("click", async () => {
-  console.log("Scan button clicked");
-
-  if (!stream) {
-    await initCamera();
-    if (!stream) {
-      alert("카메라 오류. 새로고침 해주세요.");
-      return;
-    }
-  }
-
   resetIdleTimer();
-
-  // UI 전환
   showScreen(null);
-  retryScreen.classList.remove("hidden");
-  retryScreen.classList.add("active");
+  retryScreen.classList.remove("hidden"); retryScreen.classList.add("active");
   retryBtn.style.display = "none";
-  infoText.textContent = "데이터를 해석하고 있습니다...";
-
+  infoText.textContent = "감정 에너지를 시각화합니다...";
+  
   setAnalyzingState(true);
 
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-
-  if (videoElement.videoWidth > 0) {
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-  }
-
-  // 좌우 반전 캡처
-  ctx.save();
-  ctx.scale(-1, 1);
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  ctx.save(); ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
+
+  // [중요] 딥 데이터 수집 (저장용)
+  const deepData = collectDeepData();
+  console.log("Saving Deep Data (Hidden):", deepData);
 
   canvas.toBlob(async blob => {
     const form = new FormData();
     form.append("frame", blob, "frame.jpg");
-
+    // 메타데이터 전송 (JSON 파일에 저장됨)
+    form.append("metadata", JSON.stringify(deepData));
+    
     try {
-      console.log("Sending to server...");
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
-      if (!res.ok) throw new Error("Server Error");
+      if(!res.ok) throw new Error("Server Error");
       const data = await res.json();
-      console.log("Data received:", data);
-
+      
       if (data.status === "ok") {
-        infoText.textContent = "";
-        updateAbstractShape(data);  // Vision 리턴값 → 추상 형상 파라미터
-      } else {
-        infoText.textContent = "인식된 얼굴이 없습니다.";
-        resetEmotion(false);
-      }
-    } catch (e) {
-      console.error(e);
-      infoText.textContent = "서버 연결 실패";
-      resetEmotion(false);
-    } finally {
+        infoText.textContent = ""; 
+        updateAura(data);
+      } else { infoText.textContent = "인식 실패"; }
+    } catch (e) { console.error(e); infoText.textContent = "서버 연결 실패"; } 
+    finally {
       setAnalyzingState(false);
-      setTimeout(() => {
-        retryBtn.style.display = "block";
-      }, 2000);
+      setTimeout(() => { retryBtn.style.display = "block"; }, 2000);
     }
   }, "image/jpeg", 0.9);
 });
 
-// RE-SCAN
 retryBtn.addEventListener("click", () => {
   resetIdleTimer();
   showScreen(cameraScreen);
   setBackgroundState();
-  if (videoElement.paused) videoElement.play();
+  videoElement.play();
 });
 
-// 자동 초기화
 function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    console.log("Timeout -> Reset to Start Screen");
-    showScreen(startScreen);
-    resetEmotion(true);
-    stopIdleTimer();
-  }, IDLE_LIMIT);
+  idleTimer = setTimeout(() => { location.reload(); }, IDLE_LIMIT);
 }
-function stopIdleTimer() {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = null;
-}
-
 function showScreen(target) {
-  [startScreen, cameraScreen, retryScreen].forEach(s => {
-    s.classList.remove("active");
-    s.classList.add("hidden");
-  });
-  if (target) {
-    target.classList.remove("hidden");
-    target.classList.add("active");
+  [startScreen, cameraScreen, retryScreen].forEach(s => { s.classList.remove("active"); s.classList.add("hidden"); });
+  if (target) { target.classList.remove("hidden"); target.classList.add("active"); }
+}
+
+
+/* ================= [3] Three.js 시각화 (안정된 버전) ================= */
+// 여기서는 소리나 기울기 값을 시각화에 쓰지 않습니다 (요청사항 반영)
+let scene, camera, renderer, points;
+const PARTICLE_COUNT = 6000;
+let particlesData = []; 
+let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
+let isActive = false; let time = 0;
+let targetOpacity = 0.0; let targetSpeed = 1.0;
+noise.seed(Math.random());
+
+function initThree() {
+  const container = document.getElementById("container");
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000); 
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.z = 300; 
+  renderer = new THREE.WebGLRenderer({ alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  container.appendChild(renderer.domElement);
+
+  const posArray = new Float32Array(PARTICLE_COUNT * 3);
+  const colorArray = new Float32Array(PARTICLE_COUNT * 3);
+
+  for(let i=0; i<PARTICLE_COUNT; i++) {
+    posArray[i*3] = 0; posArray[i*3+1] = -1000; posArray[i*3+2] = 0;
+    particlesData.push({ vx: 0, vy: 0, vz: 0, life: Math.random(), maxLife: 0.5 + Math.random(), seed: Math.random()*100 });
+    colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
   }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+  const mat = new THREE.PointsMaterial({ size: 4.0, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  points = new THREE.Points(geo, mat);
+  scene.add(points);
 }
 
-// 인터랙션 → 타이머 연장
-window.addEventListener("touchstart", () => {
-  if (!startScreen.classList.contains("active")) resetIdleTimer();
-});
-window.addEventListener("click", () => {
-  if (!startScreen.classList.contains("active")) resetIdleTimer();
-});
-
-
-// =======================[ 2. 추상 컬러 잉크 형상 캔버스 ]========================
-
-// 배경 컨테이너 안에 풀스크린 캔버스 생성
-const container = document.getElementById("container");
-const emotionCanvas = document.createElement("canvas");
-emotionCanvas.id = "emotionCanvas";
-emotionCanvas.style.position = "absolute";
-emotionCanvas.style.top = "0";
-emotionCanvas.style.left = "0";
-emotionCanvas.style.width = "100%";
-emotionCanvas.style.height = "100%";
-emotionCanvas.style.pointerEvents = "none";
-container.appendChild(emotionCanvas);
-
-const ectx = emotionCanvas.getContext("2d");
-let cw = 0;
-let ch = 0;
-
-function resizeEmotionCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = container.getBoundingClientRect();
-  cw = rect.width;
-  ch = rect.height;
-  emotionCanvas.width = rect.width * dpr;
-  emotionCanvas.height = rect.height * dpr;
-  ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener("resize", resizeEmotionCanvas);
-resizeEmotionCanvas();
-
-// 내부 state (Vision 리턴값들을 재가공해서 저장)
-let currentState = {
-  joy: 0,
-  sorrow: 0,
-  anger: 0,
-  surprise: 0,
-  valence: 0,      // joy - sorrow
-  energy: 0,       // 감정 강도 × 신뢰도
-  tension: 0,      // anger
-  instability: 0,  // surprise
-
-  blur: 0,         // blurredLikelihood
-  dark: 0,         // underExposedLikelihood
-  headwear: 0,     // headwearLikelihood
-
-  detection: 1,
-  landmark: 1,
-  pan: 0,          // -1 ~ 1
-  tilt: 0,         // -1 ~ 1
-  roll: 0,         // -1 ~ 1
-  boxSize: 0.5,
-  faceCount: 1
-};
-
-let targetState = { ...currentState };
-let analyzing = false;
-let lastTime = 0;
-let baseSeed = Math.random() * 1000;
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-function hslToRgba(h, s, l, a) {
-  h = ((h % 360) + 360) % 360;
-  s /= 100;
-  l /= 100;
-  let c = (1 - Math.abs(2*l - 1)) * s;
-  let x = c * (1 - Math.abs((h/60) % 2 - 1));
-  let m = l - c/2;
-  let r=0, g=0, b=0;
-  if (0 <= h && h < 60) { r=c; g=x; b=0; }
-  else if (60 <= h && h < 120) { r=x; g=c; b=0; }
-  else if (120 <= h && h < 180) { r=0; g=c; b=x; }
-  else if (180 <= h && h < 240) { r=0; g=x; b=c; }
-  else if (240 <= h && h < 300) { r=x; g=0; b=c; }
-  else { r=c; g=0; b=x; }
-  r = Math.round((r+m)*255);
-  g = Math.round((g+m)*255);
-  b = Math.round((b+m)*255);
-  return `rgba(${r},${g},${b},${a})`;
+function resetParticle(idx, positions) {
+  const i3 = idx * 3;
+  if (targetOpacity > 0.1) { 
+    const spread = 20; 
+    positions[i3] = (Math.random() - 0.5) * spread;
+    positions[i3+1] = -80 + (Math.random() - 0.5) * spread;
+    positions[i3+2] = (Math.random() - 0.5) * spread;
+  } else { positions[i3] = 0; positions[i3+1] = -1000; positions[i3+2] = 0; }
+  if (particlesData[idx]) { particlesData[idx].life = 0; particlesData[idx].vx = 0; particlesData[idx].vy = 0; }
 }
 
-// perlin noise (perlin.js)
-function n2(x, y, t) {
-  return noise.simplex3(x, y, t);
+function updateAura(data) {
+  if (!data.emotions) return;
+  currentEmotions = data.emotions;
+  isActive = true; targetOpacity = 1.0; targetSpeed = 1.0;
 }
+function setAnalyzingState(isAnalyzing) { if(isAnalyzing) { targetOpacity = 0.5; targetSpeed = 3.0; } }
+function setBackgroundState() { targetOpacity = 0.3; targetSpeed = 0.5; }
 
-// Vision 응답 → 내부 파라미터로 매핑
-function processVisionData(data) {
-  const emo  = data.emotions || {};
-  const qual = data.quality  || {};
-  const face = data.face     || {};
+function animate() {
+  requestAnimationFrame(animate);
+  const positions = points.geometry.attributes.position.array;
+  const colors = points.geometry.attributes.color.array;
+  const { joy, sorrow, anger, surprise } = currentEmotions;
+  time += 0.008; 
+  points.material.opacity += (targetOpacity - points.material.opacity) * 0.05;
 
-  let joy      = emo.joy      ?? 0;
-  let sorrow   = emo.sorrow   ?? 0;
-  let anger    = emo.anger    ?? 0;
-  let surprise = emo.surprise ?? 0;
-
-  // 감정 값 정규화 (0~1 범위 가정 + 노이즈 컷)
-  const maxRawEmo = Math.max(joy, sorrow, anger, surprise, 1);
-  if (maxRawEmo > 1.0) {
-    joy      /= maxRawEmo;
-    sorrow   /= maxRawEmo;
-    anger    /= maxRawEmo;
-    surprise /= maxRawEmo;
+  let tr=0.5, tg=0.5, tb=0.8; let upwardForce=0.3; let turbulence=0.5; let spread=1.0;           
+  if (isActive) {
+    if (joy>0.1) { tr=1.0; tg=0.9; tb=0.2; upwardForce=1.0+joy; turbulence=1.0; spread=2.0; }
+    if (anger>0.1) { tr=1.0; tg=0.1; tb=0.1; upwardForce=0.5; turbulence=4.0; spread=3.0; }
+    if (sorrow>0.1) { tr=0.1; tg=0.3; tb=0.9; upwardForce=0.1; turbulence=0.2; spread=0.5; }
+    if (surprise>0.1) { tr=1.0; tg=1.0; tb=1.0; upwardForce=1.5; spread=4.0; }
   }
 
-  const emoCut = 0.05;
-  if (joy      < emoCut) joy = 0;
-  if (sorrow   < emoCut) sorrow = 0;
-  if (anger    < emoCut) anger = 0;
-  if (surprise < emoCut) surprise = 0;
+  // [시각화 로직: 소리/자세 반영 X]
+  // 오직 감정(joy, sorrow 등)에 의해서만 움직임이 결정됨
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    if (points.material.opacity < 0.01) continue;
+    const p = particlesData[i]; const idx = i * 3;
+    p.life += 0.01 * targetSpeed;
+    if (p.life > p.maxLife) resetParticle(i, positions);
 
-  let sumEmo = joy + sorrow + anger + surprise;
-  if (sumEmo > 0) {
-    joy      /= sumEmo;
-    sorrow   /= sumEmo;
-    anger    /= sumEmo;
-    surprise /= sumEmo;
+    let cx = positions[idx]; let cy = positions[idx+1];
+    const nX = noise.simplex3(cx * 0.008, cy * 0.008, time + p.seed);
+    const nY = noise.simplex3(cx * 0.008, cy * 0.008 + 100, time + p.seed);
+    
+    // 순수 감정 기반 움직임
+    p.vx += nX * turbulence * 0.05; 
+    p.vy += upwardForce * 0.05; 
+    p.vx += (cx * 0.001) * spread; 
+
+    p.vx *= 0.95; p.vy *= 0.95; p.vz *= 0.95;
+    positions[idx] += p.vx * targetSpeed; positions[idx+1] += p.vy * targetSpeed; positions[idx+2] += p.vz * targetSpeed;
+
+    const opacity = Math.sin(p.life / p.maxLife * Math.PI); 
+    colors[idx] += (tr - colors[idx]) * 0.05; colors[idx+1] += (tg - colors[idx+1]) * 0.05; colors[idx+2] += (tb - colors[idx+2]) * 0.05;
+    colors[idx] = Math.max(0, colors[idx] * opacity); colors[idx+1] = Math.max(0, colors[idx+1] * opacity); colors[idx+2] = Math.max(0, colors[idx+2] * opacity);
   }
-
-  // 품질
-  let blur   = qual.blur   ?? 0;
-  let dark   = qual.dark   ?? 0;
-  let head   = qual.headwear ?? 0;
-
-  // 얼굴 메타
-  let detection = face.detectionConfidence ?? 1;
-  let landmark  = face.landmarkConfidence  ?? 1;
-  let pan       = face.pan  ?? 0;
-  let tilt      = face.tilt ?? 0;
-  let roll      = face.roll ?? 0;
-  let boxSize   = face.boxSize ?? 0.5;
-  let faceCount = face.faceCount ?? data.face_count ?? 1;
-
-  function clamp01(v){ return Math.max(0, Math.min(1, v)); }
-  blur      = clamp01(blur);
-  dark      = clamp01(dark);
-  head      = clamp01(head);
-  detection = clamp01(detection);
-  landmark  = clamp01(landmark);
-  boxSize   = clamp01(boxSize);
-  faceCount = Math.max(1, Math.min(5, faceCount));
-
-  pan  = Math.max(-1, Math.min(1, pan));
-  tilt = Math.max(-1, Math.min(1, tilt));
-  roll = Math.max(-1, Math.min(1, roll));
-
-  // 조합 지표
-  const valence     = joy - sorrow;
-  const baseEnergy  = sumEmo > 0 ? Math.max(joy, sorrow, anger, surprise) : 0;
-  const energy      = clamp01(baseEnergy * (0.5 + detection*0.5));
-  const tension     = anger;
-  const instability = surprise;
-
-  return {
-    joy, sorrow, anger, surprise,
-    valence, energy, tension, instability,
-    blur, dark, headwear: head,
-    detection, landmark,
-    pan, tilt, roll,
-    boxSize, faceCount
-  };
+  points.geometry.attributes.position.needsUpdate = true;
+  points.geometry.attributes.color.needsUpdate = true;
+  renderer.render(scene, camera);
 }
-
-function updateAbstractShape(data) {
-  const processed = processVisionData(data);
-  targetState = { ...targetState, ...processed };
-
-  if (targetState.energy < 0.12 && targetState.detection < 0.4) {
-    targetState.energy = 0.0;
-  }
-  baseSeed = Math.random() * 1000;
-}
-
-function setAnalyzingState(isAnalyzing) {
-  analyzing = isAnalyzing;
-}
-
-function setBackgroundState() {
-  targetState.energy *= 0.4;
-  targetState.detection *= 0.6;
-}
-
-function resetEmotion(fully) {
-  if (fully) {
-    targetState = {
-      joy: 0,
-      sorrow: 0,
-      anger: 0,
-      surprise: 0,
-      valence: 0,
-      energy: 0,
-      tension: 0,
-      instability: 0,
-      blur: 0,
-      dark: 0,
-      headwear: 0,
-      detection: 1,
-      landmark: 1,
-      pan: 0,
-      tilt: 0,
-      roll: 0,
-      boxSize: 0.5,
-      faceCount: 1
-    };
-  } else {
-    targetState.energy *= 0.2;
-    targetState.detection *= 0.5;
-  }
-}
-
-// 메인 드로잉
-function drawAbstractInk(dt) {
-  const tLerp = Math.min(dt * 0.004, 0.25);
-
-  for (const key in currentState) {
-    if (Object.prototype.hasOwnProperty.call(currentState, key)) {
-      currentState[key] = lerp(currentState[key], targetState[key], tLerp);
-    }
-  }
-
-  const w = cw;
-  const h = ch;
-  if (!w || !h) return;
-
-  const time = performance.now() * 0.001;
-
-  const {
-    valence: V,
-    energy: E,
-    tension: Tn,
-    instability: In,
-    blur,
-    dark,
-    headwear,
-    detection,
-    landmark,
-    pan,
-    tilt,
-    roll,
-    boxSize,
-    faceCount
-  } = currentState;
-
-  // 배경
-  ectx.clearRect(0, 0, w, h);
-  const bgDark = 0.7 + dark*0.3;
-  const bgGrad = ectx.createRadialGradient(
-    w/2, h*0.4, 0,
-    w/2, h*0.4, Math.max(w,h)*0.9
-  );
-  bgGrad.addColorStop(0, `rgba(0,0,0,${0.3 + 0.2*bgDark})`);
-  bgGrad.addColorStop(1, `rgba(0,0,0,${bgDark})`);
-  ectx.fillStyle = bgGrad;
-  ectx.fillRect(0,0,w,h);
-
-  const cx = w/2 + pan * w * 0.08;
-  const cy = h*0.4 + tilt * h * 0.05;
-  const sizeFactor = 0.9*boxSize + 0.4;
-
-  const baseR = Math.min(w,h) * sizeFactor * (0.10 + 0.18*E);
-  const lobesBase = 4;
-
-  const blurFactor = 1 - blur*0.8;
-  const complexityFromFaces = 0.15*(faceCount-1);
-  const lobes = Math.max(
-    2,
-    Math.round(
-      (lobesBase + In*6 + Tn*3 + complexityFromFaces) * blurFactor + 1
-    )
-  );
-  const spikiness = 0.1 + Tn*0.9;
-  const wobbleAmp = 0.04 + In*0.25;
-  const asymX = V * 0.6;
-  const asymY = currentState.sorrow * 0.7;
-  const breathing = Math.sin(time*1.1) * (0.04 + E*0.12);
-  const headClip = headwear * 0.5;
-
-  let baseHue = 230 + 25*V + 15*Tn;
-  const coreSat = 30 + 35*E + 15*In;
-  const edgeSat = coreSat * (0.4 + 0.3*blur);
-  const coreLight = 60 - 10*Tn - 5*In - 10*dark;
-  const edgeLight = 10 + 15*E - 10*dark;
-
-  const globalAlpha = 0.3 + 0.7*detection;
-
-  ectx.save();
-  ectx.translate(cx, cy);
-
-  const rot = roll * Math.PI*0.25 + (analyzing ? time*1.8 : time*0.5);
-  ectx.rotate(rot);
-
-  // 메인 외곽
-  ectx.beginPath();
-  const steps = 260;
-  for (let i = 0; i <= steps; i++) {
-    const ratio = i / steps;
-    const theta = ratio * Math.PI*2;
-
-    const lobeTerm = Math.cos(lobes*theta + baseSeed*0.3);
-    const wobble = Math.sin(theta*2 + time*1.3 + baseSeed) * wobbleAmp;
-    const nx = Math.cos(theta);
-    const ny = Math.sin(theta);
-    const n = n2(nx*0.8 + baseSeed, ny*0.8, time*0.4*(1+In));
-
-    let r = baseR * (1 + spikiness*lobeTerm + wobble + breathing + n*0.25);
-
-    const ax = 1 + asymX * Math.cos(theta);
-    let ay = 1 + asymY * Math.sin(theta - Math.PI/2);
-
-    if (headClip > 0 && Math.sin(theta) < 0) {
-      ay *= (1 - headClip*0.6);
-    }
-
-    let x = Math.cos(theta) * r * ax;
-    let y = Math.sin(theta) * r * ay + asymY*baseR*0.4;
-
-    x += y * tilt * 0.15;
-
-    if (i === 0) ectx.moveTo(x,y);
-    else ectx.lineTo(x,y);
-  }
-  ectx.closePath();
-
-  ectx.globalAlpha = globalAlpha;
-
-  const coreColor = hslToRgba(baseHue, coreSat, coreLight, 1);
-  const edgeColor = hslToRgba(baseHue - 15, edgeSat, edgeLight, 0);
-
-  const grad = ectx.createRadialGradient(0,0,baseR*0.15, 0,0,baseR*1.6);
-  grad.addColorStop(0, coreColor);
-  grad.addColorStop(1, edgeColor);
-  ectx.fillStyle = grad;
-  ectx.fill();
-
-  const outlineSharp = 1 - blur*0.7;
-  ectx.lineWidth = (0.6 + 2.2*Tn + complexityFromFaces*1.2) * outlineSharp;
-  const strokeCol = hslToRgba(
-    baseHue + 20,
-    20 + 40*Tn,
-    70 - 20*Tn - 15*dark,
-    0.18 + 0.2*Tn
-  );
-  ectx.strokeStyle = strokeCol;
-  ectx.stroke();
-
-  // 내부 레이어
-  const layerComplexity = 0.3 + 0.7*landmark + 0.15*(faceCount-1);
-  ectx.globalAlpha = globalAlpha * (0.45 + 0.35*E);
-
-  ectx.beginPath();
-  for (let i = 0; i <= steps; i++) {
-    const ratio = i / steps;
-    const theta = ratio * Math.PI*2;
-
-    const lobeTerm = Math.cos((lobes+1)*theta + baseSeed*0.73);
-    const wobble = Math.sin(theta*3 + time*0.9 + baseSeed*1.3) * wobbleAmp*0.6;
-    const nx = Math.cos(theta+0.5);
-    const ny = Math.sin(theta+0.5);
-    const n = n2(nx*1.1 + baseSeed*1.9, ny*1.1, time*0.5*(1+In*0.8));
-
-    let r = baseR*0.7 * (1 + spikiness*0.6*lobeTerm + wobble + n*0.35*layerComplexity + breathing*0.7);
-
-    const ax = 1 + asymX*0.4 * Math.cos(theta+0.7);
-    let ay = 1 + asymY*0.5 * Math.sin(theta);
-
-    if (headClip > 0 && Math.sin(theta) < 0) {
-      ay *= (1 - headClip*0.4);
-    }
-
-    let x = Math.cos(theta) * r * ax;
-    let y = Math.sin(theta) * r * ay + asymY*baseR*0.2;
-
-    x += y * tilt * 0.1;
-
-    if (i === 0) ectx.moveTo(x,y);
-    else ectx.lineTo(x,y);
-  }
-  ectx.closePath();
-
-  const innerHue = baseHue + 15*In + 10*Tn;
-  const innerSat = coreSat + 10*In;
-  const innerLight = coreLight + 5*E - 8*dark;
-
-  const innerGrad = ectx.createRadialGradient(0,0,baseR*0.1, 0,0,baseR*1.1);
-  innerGrad.addColorStop(0, hslToRgba(innerHue, innerSat, innerLight, 0.35 + 0.35*E));
-  innerGrad.addColorStop(1, hslToRgba(innerHue - 20, innerSat*0.6, edgeLight+5, 0.0));
-  ectx.fillStyle = innerGrad;
-  ectx.fill();
-
-  ectx.restore();
-}
-
-// 렌더 루프
-function loop(ts) {
-  if (!lastTime) lastTime = ts;
-  const dt = ts - lastTime;
-  lastTime = ts;
-
-  drawAbstractInk(dt);
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-
+initThree(); animate();
 </script>
 </body>
 </html>
