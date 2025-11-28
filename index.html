@@ -288,35 +288,45 @@ document.getElementById("snapBtn").addEventListener("click", snapAndAnalyze);
 
 
 /* ===========================================================
-    3) Three.js 감정 구 (시각화)
+    3) Three.js: "Digital Entropy (디지털 엔트로피)"
+    - AI 해석: 감정은 완벽한 데이터 구조(질서)를 무너뜨리는 노이즈(혼돈)다.
 =========================================================== */
-let scene, camera, renderer, geometry, points, basePositions;
+let scene, camera, renderer, geometry, points;
+let basePositions = []; 
+
+// 목표 감정 상태
+let targetEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0, arousal: 0 };
+let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0, arousal: 0 };
 
 function initThree() {
   const container = document.getElementById("container");
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  // 배경: 완전한 디지털 블랙
+  scene.background = new THREE.Color(0x000000); 
 
   const W = window.innerWidth;
   const H = window.innerHeight;
 
-  // 카메라 시점 조정
   camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-  camera.position.set(0, 0, 8); // 구를 좀 더 잘 보이게 거리 조정
+  camera.position.set(0, 0, 8); 
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(W, H);
-  renderer.setPixelRatio(window.devicePixelRatio); // 고해상도 디스플레이 대응
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
 
-  // 점 개수 증가 (더 밀도 높게)
-  const count = 3000;
+  // 입자 생성: 질서정연한 느낌을 위해 점의 개수를 적당히 유지하되 크게
+  const count = 4000;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const R = 1.8; // 기본 구 크기 확대
+  const sizes = new Float32Array(count); // 입자 크기도 개별 제어
+  const R = 2.0; 
+
+  basePositions = [];
 
   for (let i = 0; i < count; i++) {
-    // Fibonacci Sphere 알고리즘을 사용하여 점들을 구 표면에 균등하게 배치
+    // 1. 초기 상태: 완벽한 수학적 구 (질서)
+    // Fibonacci Sphere 알고리즘으로 균일하게 배치
     const goldenRatio = (1 + Math.sqrt(5)) / 2;
     const theta = 2 * Math.PI * i / goldenRatio;
     const phi = Math.acos(1 - 2 * (i + 0.5) / count);
@@ -329,25 +339,29 @@ function initThree() {
     positions[i * 3 + 1] = y;
     positions[i * 3 + 2] = z;
 
-    // 초기 색상: 약간 푸른빛 도는 흰색
-    colors[i * 3] = 0.8;
-    colors[i * 3 + 1] = 0.9;
-    colors[i * 3 + 2] = 1.0;
-  }
+    basePositions.push({x, y, z});
 
-  basePositions = positions.slice();
+    // 색상: AI의 기본 컬러 = Cyan / Electric Blue
+    colors[i * 3] = 0.0;
+    colors[i * 3 + 1] = 1.0;
+    colors[i * 3 + 2] = 1.0;
+    
+    sizes[i] = 1.0;
+  }
 
   geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
 
-  // 점 재질 설정
+  // 쉐이더 느낌의 재질
   const material = new THREE.PointsMaterial({
-    size: 0.035, // 점 크기 약간 확대
+    size: 0.03,
     vertexColors: true,
     transparent: true,
     opacity: 0.9,
-    blending: THREE.AdditiveBlending // 빛나는 효과
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true
   });
 
   points = new THREE.Points(geometry, material);
@@ -360,102 +374,179 @@ function initThree() {
   });
 }
 
+function lerp(start, end, t) {
+  return start * (1 - t) + end * t;
+}
+
 function animate() {
   requestAnimationFrame(animate);
-  if (points) {
-    // 천천히 자전
-    points.rotation.y += 0.0015;
-    points.rotation.x += 0.0005;
+
+  if (!points) return;
+
+  // 감정 상태 업데이트 (반응 속도: 0.08 - 기계적으로 빠릿하게)
+  const speed = 0.08;
+  currentEmotions.joy = lerp(currentEmotions.joy, targetEmotions.joy, speed);
+  currentEmotions.sorrow = lerp(currentEmotions.sorrow, targetEmotions.sorrow, speed);
+  currentEmotions.anger = lerp(currentEmotions.anger, targetEmotions.anger, speed);
+  currentEmotions.surprise = lerp(currentEmotions.surprise, targetEmotions.surprise, speed);
+  currentEmotions.arousal = lerp(currentEmotions.arousal, targetEmotions.arousal, speed);
+
+  const positions = geometry.attributes.position.array;
+  const colors = geometry.attributes.color.array;
+  
+  // 시간 변수
+  const time = performance.now() * 0.001;
+  
+  const joy = currentEmotions.joy;
+  const sorrow = currentEmotions.sorrow;
+  const anger = currentEmotions.anger;
+  const surprise = currentEmotions.surprise;
+  const arousal = currentEmotions.arousal;
+
+  // 기본 회전: 기계적인 등속 회전
+  points.rotation.y = time * 0.2;
+  
+  // 분노 시 회전이 뚝뚝 끊김 (Lag 현상)
+  if (Math.random() < anger * 0.3) {
+      points.rotation.y += (Math.random() - 0.5) * 0.5;
+      points.rotation.x += (Math.random() - 0.5) * 0.5;
   }
+
+  for (let i = 0; i < basePositions.length; i++) {
+    const base = basePositions[i];
+    const idx = i * 3;
+
+    let nx = base.x;
+    let ny = base.y;
+    let nz = base.z;
+
+    // --- [1. AI의 감정 해석: 데이터 변형] ---
+
+    // A. 기쁨 (Joy) = 데이터 확장 및 순환 (Processing Power Increase)
+    // 구가 커지면서 사인파 형태로 부드럽게 물결침 (안정적인 오버클럭)
+    const joyWave = Math.sin(time * 3 + base.y * 2) * joy * 0.5;
+    const joyExpand = 1.0 + (joy * 0.5);
+    
+    // B. 분노 (Anger) = 글리치 노이즈 (System Instability)
+    // 입자들이 랜덤하게 튀어 나감 (고주파 노이즈)
+    // Math.random()을 매 프레임 호출하면 지직거리는 효과 남
+    const glitchX = (Math.random() - 0.5) * anger * 0.6;
+    const glitchY = (Math.random() - 0.5) * anger * 0.6;
+    const glitchZ = (Math.random() - 0.5) * anger * 0.6;
+
+    // C. 슬픔 (Sorrow) = 데이터 압축 및 소실 (Signal Loss)
+    // 구가 찌그러지고(납작해짐) 입자들이 중심이나 바닥으로 꺼짐
+    const collapse = 1.0 - (sorrow * 0.6);
+    
+    // D. 놀람 (Surprise) = 산란 (Scattering)
+    // 입자들이 밖으로 확 흩어짐
+    const scatter = surprise * Math.sin(time * 10 + i) * 0.3;
+
+    // 좌표 합성
+    // 1. 기쁨(확장)과 슬픔(축소) 적용
+    nx *= joyExpand * collapse;
+    ny *= joyExpand * collapse;
+    nz *= joyExpand * collapse;
+
+    // 2. 기쁨의 물결 추가 (방향성 있게)
+    nx += base.x * joyWave;
+    ny += base.y * joyWave;
+    nz += base.z * joyWave;
+
+    // 3. 분노의 글리치(노이즈)는 좌표 자체를 뒤흔듦
+    nx += glitchX + scatter;
+    ny += glitchY + scatter;
+    nz += glitchZ + scatter;
+
+    // 슬픔일 때 y축 데이터가 바닥으로 흐름 (흘러내리는 데이터)
+    if (sorrow > 0.1) {
+        ny -= Math.abs(Math.sin(time * 0.5 + base.x)) * sorrow * 1.5;
+    }
+
+    positions[idx] = nx;
+    positions[idx + 1] = ny;
+    positions[idx + 2] = nz;
+
+
+    // --- [2. 색상: 시스템 상태 표시] ---
+
+    // 기본색: Cyan (0, 1, 1) - 정상 작동 중
+    let r = 0.0;
+    let g = 1.0;
+    let b = 1.0;
+
+    if (joy > 0.1) {
+        // 기쁨: High Performance Mode (Magenta/Pink)
+        // Cyan과 섞이면서 파스텔 톤의 화려한 색이 됨
+        r += joy * 1.0; 
+        g -= joy * 0.5; // Green을 빼서 Pink로
+    }
+    
+    if (anger > 0.1) {
+        // 분노: Critical Error (Red/Orange)
+        // 강렬하게 깜빡거림
+        const flash = Math.sin(time * 30) > 0 ? 1 : 0.5; // 깜빡임
+        r += anger * 1.0 * flash;
+        g -= anger * 1.0;
+        b -= anger * 1.0;
+    }
+
+    if (sorrow > 0.1) {
+        // 슬픔: Power Saving / Dim (Dark Blue/Grey)
+        // 빛이 꺼져가는 느낌
+        r = 0.1;
+        g = 0.1 + (1 - sorrow) * 0.5;
+        b = 0.3 + (1 - sorrow) * 0.7;
+    }
+    
+    if (surprise > 0.1) {
+        // 놀람: White Flash (Overexposure)
+        // 모든 색상이 최대치로
+        r += surprise;
+        g += surprise;
+        b += surprise;
+    }
+
+    // 흥분도(Arousal)가 높으면 전체 밝기(Intensity) 증가
+    r += arousal * 0.2;
+    g += arousal * 0.2;
+    b += arousal * 0.2;
+
+    colors[idx] = Math.min(1, Math.max(0, r));
+    colors[idx + 1] = Math.min(1, Math.max(0, g));
+    colors[idx + 2] = Math.min(1, Math.max(0, b));
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+  geometry.attributes.color.needsUpdate = true;
+  
   renderer.render(scene, camera);
+}
+
+/* ===========================================================
+    4) 데이터 수신부 (서버에서 받은 값을 목표치로 설정)
+=========================================================== */
+function updateSphereFromEmotion(data) {
+  if (!data.emotions) return;
+  const e = data.emotions;
+  
+  targetEmotions.joy = e.joy || 0;
+  targetEmotions.sorrow = e.sorrow || 0;
+  targetEmotions.anger = e.anger || 0;
+  targetEmotions.surprise = e.surprise || 0;
+  targetEmotions.arousal = (data.arousal || 0) * 0.5; 
+  
+  console.log("AI State Updated:", targetEmotions);
 }
 
 initThree();
 animate();
 
 
-/* ===========================================================
-    4) 감정 데이터 → 구 시각화 매핑 함수
-=========================================================== */
-function updateSphereFromEmotion(data) {
-  if (!geometry || !data.emotions) return;
-
-  const { joy, sorrow, anger, surprise } = data.emotions;
-  // valence: 긍정(>0) vs 부정(<0)
-  // arousal: 흥분(>0) vs 차분(0에 가까움)
-  const valence = data.valence;
-  const arousal = data.arousal;
-
-  // 1. 크기 변화 (Valence 기반)
-  // 긍정적일수록 커짐 (기본 1.0배 ~ 최대 1.5배)
-  let targetScale = 1.0 + (valence * 0.5);
-  // 부정적일수록 약간 작아짐 (최소 0.8배)
-  if (valence < 0) targetScale = 1.0 + (valence * 0.2);
   
-  // 부드러운 크기 변화를 위해 GSAP 같은 라이브러리를 쓰면 좋지만,
-  // 지금은 간단하게 바로 적용합니다.
-  points.scale.set(targetScale, targetScale, targetScale);
-
-
-  // 2. 점들의 움직임 (Jitter) 및 색상 변화
-  const positions = geometry.attributes.position;
-  const colors = geometry.attributes.color;
-  const count = positions.count;
-
-  // Arousal(흥분도)가 높을수록 진폭(jitterAmp)과 속도(timeSpeed) 증가
-  const jitterAmp = 0.02 + (arousal * 0.15); 
-  const timeSpeed = 1.0 + (arousal * 3.0);
-  const t = performance.now() * 0.001 * timeSpeed;
-
-  for (let i = 0; i < count; i++) {
-    const i3 = i * 3;
-    const bx = basePositions[i3];
-    const by = basePositions[i3 + 1];
-    const bz = basePositions[i3 + 2];
-
-    // 노이즈 함수를 사용하여 불규칙한 움직임 생성 (간이 구현)
-    // 각 점마다 조금씩 다른 위상을 줘서 일렁이는 느낌
-    const noiseX = Math.sin(t * 1.1 + by * 2.5 + bz * 1.3);
-    const noiseY = Math.cos(t * 1.3 + bx * 2.2 + bz * 1.7);
-    const noiseZ = Math.sin(t * 1.7 + bx * 1.9 + by * 2.1);
-
-    positions.array[i3]     = bx + noiseX * jitterAmp;
-    positions.array[i3 + 1] = by + noiseY * jitterAmp;
-    positions.array[i3 + 2] = bz + noiseZ * jitterAmp;
-
-    // --- 색상 매핑 로직 개선 ---
-    // 기본 베이스: 중립적인 회색/흰색
-    let r = 0.6, g = 0.6, b = 0.7;
-
-    if (valence >= 0) {
-      // 긍정적 (Joy) -> 노랑/주황 계열
-      r += joy * 0.4;
-      g += joy * 0.3;
-      b -= joy * 0.2; // 파랑을 빼서 따뜻하게
-    } else {
-      // 부정적 (Sorrow, Anger) -> 파랑/보라/빨강 계열
-      const neg = Math.abs(valence);
-      r += anger * 0.5;    // 화남 -> 빨강 추가
-      b += sorrow * 0.5;   // 슬픔 -> 파랑 추가
-      g -= neg * 0.3;      // 초록을 빼서 어둡거나 강렬하게
-    }
-
-    // Surprise/Arousal이 높으면 전체적으로 밝고 하얗게 빛남 (채도 감소, 명도 증가)
-    const boost = (surprise + arousal) * 0.4;
-    r = Math.min(1.0, r + boost);
-    g = Math.min(1.0, g + boost);
-    b = Math.min(1.0, b + boost);
-
-    colors.array[i3]     = r;
-    colors.array[i3 + 1] = g;
-    colors.array[i3 + 2] = b;
-  }
-
-  positions.needsUpdate = true;
-  colors.needsUpdate = true;
-}
 </script>
 </body>
 </html>
+
 
 
