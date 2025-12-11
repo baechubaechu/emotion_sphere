@@ -1,91 +1,13 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Deep Digital Aura</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
-    
-    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
-    
-    /* UI 스타일 */
-    .screen {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      transition: opacity 0.5s ease;
-      z-index: 10;
-      pointer-events: none;
-    }
-    .screen.active { opacity: 1; pointer-events: auto; }
-    .screen.hidden { opacity: 0; pointer-events: none; display: none; }
-
-    button {
-      padding: 16px 40px;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      background: rgba(0, 0, 0, 0.6);
-      color: #fff; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px;
-      backdrop-filter: blur(5px);
-      text-transform: uppercase;
-    }
-    button:active { transform: scale(0.95); }
-
-    /* 화면별 요소 */
-    #start-screen { z-index: 30; background: #000; } 
-    #startBtn { border: none; background: transparent; font-size: 22px; letter-spacing: 4px; animation: pulse 2s infinite; }
-    @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
-    #camera-screen { justify-content: flex-end; padding-bottom: 60px; background: rgba(0,0,0,0.3); }
-    #camera-frame {
-      position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-      width: 300px; height: 300px; 
-      border: 1px solid rgba(255,255,255,0.3); background: #000; overflow: hidden;
-    }
-    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.8; }
-    #face-guide {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 60%; height: 70%; border: 2px dashed rgba(255,255,255,0.5); border-radius: 50%;
-    }
-    
-    #retry-screen { justify-content: flex-end; padding-bottom: 60px; }
-    #info-text { position: absolute; top: 15%; width: 100%; text-align: center; color: rgba(255,255,255,0.7); }
-
-    #snap { display: none; }
-  </style>
-</head>
-<body>
-
-<div id="container"></div>
-
-<div id="start-screen" class="screen active">
-  <button id="startBtn">TOUCH TO START</button>
-  <div style="color:#555; font-size:10px; margin-top:10px;">카메라 권한 승인 필요</div>
-</div>
-
-<div id="camera-screen" class="screen hidden">
-  <div id="camera-frame">
-    <video id="cam" autoplay playsinline muted></video>
-    <div id="face-guide"></div>
-  </div>
-  <button id="scanBtn">SCAN AURA</button>
-</div>
-
-<div id="retry-screen" class="screen hidden">
-  <div id="info-text">분석 중...</div>
-  <button id="retryBtn">↺ RE-SCAN</button>
-</div>
-
-<canvas id="snap"></canvas>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
-/* ================= [0] 내장 노이즈 함수 (외부 의존성 제거) ================= */
-// Simplex Noise의 아주 가벼운 구현체입니다.
+/* ================= [0] 유틸리티 ================= */
+document.getElementById('emergency-btn').addEventListener('click', () => {
+  if(confirm("재시작하시겠습니까?")) location.reload();
+});
+
 const SimplexNoise = function() {
   this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
   this.p = []; for (var i=0; i<256; i++) this.p[i] = Math.floor(Math.random()*256);
@@ -114,49 +36,7 @@ SimplexNoise.prototype.noise = function(xin, yin) {
 const noise = new SimplexNoise();
 
 
-/* ================= [1] 데이터 수집 (백그라운드) ================= */
-let audioContext, analyser, microphone;
-let audioVolume = 0; 
-let deviceTilt = 90; 
-
-function setupAudioAnalysis(stream) {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    
-    audioContext = new AudioContext();
-    analyser = audioContext.createAnalyser();
-    microphone = audioContext.createMediaStreamSource(stream);
-    microphone.connect(analyser);
-    analyser.fftSize = 256;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    
-    function measureVolume() {
-      analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
-      for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
-      audioVolume = sum / dataArray.length;
-      requestAnimationFrame(measureVolume);
-    }
-    measureVolume();
-  } catch(e) { console.log("Audio init fail"); }
-}
-
-function handleOrientation(event) {
-  if (event.beta !== null) deviceTilt = Math.abs(event.beta);
-}
-
-function collectDeepData() {
-  return {
-    sound: { level: audioVolume.toFixed(1) },
-    posture: { tilt: deviceTilt.toFixed(1) },
-    device: { ua: navigator.userAgent },
-    timestamp: new Date().toString()
-  };
-}
-
-
-/* ================= [2] 시퀀스 로직 ================= */
+/* ================= [1] UI 로직 ================= */
 const startScreen = document.getElementById("start-screen");
 const cameraScreen = document.getElementById("camera-screen");
 const retryScreen = document.getElementById("retry-screen");
@@ -172,20 +52,10 @@ const IDLE_LIMIT = 60000;
 
 startBtn.addEventListener("click", async () => {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     videoElement.srcObject = stream;
     videoElement.play();
-    setupAudioAnalysis(stream);
-  } catch (e) { alert("권한이 필요합니다."); return; }
-
-  // 센서 권한
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(r => {
-      if (r === 'granted') window.addEventListener('deviceorientation', handleOrientation);
-    }).catch(console.error);
-  } else {
-    window.addEventListener('deviceorientation', handleOrientation);
-  }
+  } catch (e) { alert("카메라 권한이 필요합니다."); return; }
 
   showScreen(cameraScreen);
   resetIdleTimer();
@@ -196,39 +66,45 @@ scanBtn.addEventListener("click", async () => {
   showScreen(null);
   retryScreen.classList.remove("hidden"); retryScreen.classList.add("active");
   retryBtn.style.display = "none";
-  infoText.textContent = "분석 중...";
+  infoText.textContent = "공간 속의 자아를 찾는 중...";
   
-  // 시각 효과: 분석 모드
-  setAnalyzingState(true);
+  spheres.forEach(s => s.setAnalyzing(true));
 
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  canvas.width = videoElement.videoWidth || 640;
-  canvas.height = videoElement.videoHeight || 480;
+  // 서버 분석 기준 해상도 (640x480)에 맞춤
+  canvas.width = 640;
+  canvas.height = 480;
   ctx.save(); ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  // 데이터 수집
-  const deepData = collectDeepData();
+  const basicMeta = { device: navigator.userAgent, timestamp: new Date().toString() };
 
   canvas.toBlob(async blob => {
     const form = new FormData();
     form.append("frame", blob, "frame.jpg");
-    form.append("metadata", JSON.stringify(deepData));
+    form.append("metadata", JSON.stringify(basicMeta));
     
     try {
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Error");
       const data = await res.json();
       
-      if (data.status === "ok") {
-        infoText.textContent = ""; 
-        updateAura(data);
-      } else { infoText.textContent = "인식 실패"; }
-    } catch (e) { console.error(e); infoText.textContent = "연결 실패"; } 
+      if (data.status === "ok" && data.face_count > 0) {
+        infoText.textContent = "";
+        updateSpheresState(data.faces_list);
+      } else {
+        infoText.textContent = "얼굴을 찾을 수 없습니다.";
+        updateSpheresState([]); 
+      }
+    } catch (e) { 
+      console.error(e); 
+      infoText.textContent = "서버 연결 실패"; 
+      updateSpheresState([]);
+    } 
     finally {
-      setAnalyzingState(false);
+      spheres.forEach(s => s.setAnalyzing(false));
       setTimeout(() => { retryBtn.style.display = "block"; }, 2000);
     }
   }, "image/jpeg", 0.9);
@@ -237,7 +113,7 @@ scanBtn.addEventListener("click", async () => {
 retryBtn.addEventListener("click", () => {
   resetIdleTimer();
   showScreen(cameraScreen);
-  setBackgroundState();
+  spheres.forEach(s => s.setBackground());
   videoElement.play();
 });
 
@@ -251,155 +127,197 @@ function showScreen(target) {
 }
 
 
-/* ================= [3] Three.js 시각화 (안전 버전) ================= */
-let scene, camera, renderer, points;
-const PARTICLE_COUNT = 5000;
-let particlesData = []; 
-let currentEmotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
-let isActive = false; let time = 0;
-let targetOpacity = 0.0; let targetSpeed = 1.0;
+/* ================= [2] Three.js: Multi-Sphere System (Max 6 & Position Mapping) ================= */
+let scene, camera, renderer;
+let time = 0;
+const MAX_SPHERES = 6; 
+let spheres = []; 
+// 서버 분석 기준 해상도
+const IMG_W = 640;
+const IMG_H = 480;
+
+class Sphere {
+    constructor(scene) {
+        this.particleCount = 4000;
+        this.radius = 70; 
+        this.particlesData = [];
+        this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
+        this.pose = { pan: 0, tilt: 0, size: 0.5 };
+        this.isActive = false;
+        this.targetOpacity = 0.0;
+        this.currentOpacity = 0.0;
+        
+        this._initMesh(scene);
+    }
+
+    _initMesh(scene) {
+        const posArray = new Float32Array(this.particleCount * 3);
+        const colorArray = new Float32Array(this.particleCount * 3);
+
+        for(let i=0; i<this.particleCount; i++) {
+            const phi = Math.acos( -1 + ( 2 * i ) / this.particleCount );
+            const theta = Math.sqrt( this.particleCount * Math.PI ) * phi;
+            const x = this.radius * Math.cos( theta ) * Math.sin( phi );
+            const y = this.radius * Math.sin( theta ) * Math.sin( phi );
+            const z = this.radius * Math.cos( phi );
+
+            posArray[i*3] = x; posArray[i*3+1] = y; posArray[i*3+2] = z;
+            this.particlesData.push({ ox: x, oy: y, oz: z, seed: Math.random() * 100 });
+            colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+        const mat = new THREE.PointsMaterial({ 
+            size: 2.5, vertexColors: true, transparent: true, opacity: 0, 
+            blending: THREE.AdditiveBlending, depthWrite: false 
+        });
+        
+        this.mesh = new THREE.Points(geo, mat);
+        scene.add(this.mesh);
+    }
+
+    updateData(faceData) {
+        this.emotions = faceData.emotions;
+        this.pose = faceData.pose;
+        this.isActive = true;
+        this.targetOpacity = 1.0;
+    }
+
+    hide() {
+        this.isActive = false;
+        this.targetOpacity = 0.0;
+        this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
+    }
+
+    setAnalyzing(isAnalyzing) { if(this.isActive && isAnalyzing) this.targetOpacity = 0.4; }
+    setBackground() { if(this.isActive) this.targetOpacity = 0.2; }
+
+    animate(time) {
+        this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.05;
+        this.mesh.material.opacity = this.currentOpacity;
+
+        if (this.currentOpacity < 0.01) return;
+
+        const positions = this.mesh.geometry.attributes.position.array;
+        const colors = this.mesh.geometry.attributes.color.array;
+        const { joy, sorrow, anger, surprise } = this.emotions;
+        const { pan, tilt, boxSize } = this.pose;
+
+        this.mesh.rotation.y += (pan * 0.8 - this.mesh.rotation.y) * 0.05;
+        this.mesh.rotation.x += (-tilt * 0.8 - this.mesh.rotation.x) * 0.05;
+        const targetScale = 0.8 + (boxSize * 0.5);
+        this.mesh.scale.setScalar(this.mesh.scale.x + (targetScale - this.mesh.scale.x) * 0.05);
+
+        let tr=0.5, tg=0.5, tb=0.8; 
+        let noiseIntensity = 0.5; let breathingSpeed = 1.0; let pulse = 0.0;          
+
+        if (this.isActive) {
+            if (joy > 0.1) { tr=1.0; tg=0.9; tb=0.2; noiseIntensity = 2.0; pulse = joy * 15; }
+            if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; noiseIntensity = 10.0 + anger * 10; breathingSpeed = 5.0; }
+            if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=0.9; noiseIntensity = 1.0; }
+            if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; noiseIntensity = 5.0; pulse = surprise * 25; }
+        }
+
+        for (let i = 0; i < this.particleCount; i++) {
+            const idx = i * 3;
+            const p = this.particlesData[i];
+            let x = p.ox; let y = p.oy; let z = p.oz;
+
+            const n = noise.noise(x * 0.01 + time, y * 0.01 + time * breathingSpeed);
+            const distortion = n * noiseIntensity;
+            const len = Math.sqrt(x*x + y*y + z*z);
+            const nx = x / len; const ny = y / len; const nz = z / len;
+
+            let finalX = x + nx * (distortion + pulse);
+            let finalY = y + ny * (distortion + pulse);
+            let finalZ = z + nz * (distortion + pulse);
+
+            if (sorrow > 0.2) finalY -= Math.abs(n) * (sorrow * 30);
+
+            positions[idx] = finalX; positions[idx+1] = finalY; positions[idx+2] = finalZ;
+
+            colors[idx] += (tr - colors[idx]) * 0.05; 
+            colors[idx+1] += (tg - colors[idx+1]) * 0.05; 
+            colors[idx+2] += (tb - colors[idx+2]) * 0.05;
+        }
+        this.mesh.geometry.attributes.position.needsUpdate = true;
+        this.mesh.geometry.attributes.color.needsUpdate = true;
+    }
+}
 
 function initThree() {
-  const container = document.getElementById("container");
-  scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000); 
-  
-  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
-  camera.position.z = 200; 
-  
-  renderer = new THREE.WebGLRenderer({ alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  container.appendChild(renderer.domElement);
-
-  const posArray = new Float32Array(PARTICLE_COUNT * 3);
-  const colorArray = new Float32Array(PARTICLE_COUNT * 3);
-
-  for(let i=0; i<PARTICLE_COUNT; i++) {
-    // 1. 입자를 화면 중앙 하단에 미리 배치 (안보이게)
-    // -50 ~ 50 사이 X, -100 근처 Y
-    posArray[i*3] = (Math.random() - 0.5) * 50; 
-    posArray[i*3+1] = -80 + (Math.random() - 0.5) * 20; 
-    posArray[i*3+2] = (Math.random() - 0.5) * 50;
-
-    particlesData.push({ 
-        vx: 0, vy: 0, vz: 0, 
-        life: Math.random(), 
-        maxLife: 0.5 + Math.random(), 
-        seed: Math.random()*100 
-    });
+    const container = document.getElementById("container");
+    scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
     
-    // 초기 색상 (흰색)
-    colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
-  }
-  
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-  
-  const mat = new THREE.PointsMaterial({ 
-      size: 3.5, 
-      vertexColors: true, 
-      transparent: true, 
-      opacity: 0, // 처음엔 투명해서 안보임
-      blending: THREE.AdditiveBlending, 
-      depthWrite: false 
-  });
-  
-  points = new THREE.Points(geo, mat);
-  scene.add(points);
-  
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
+    camera.position.z = 600; 
+
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    for (let i = 0; i < MAX_SPHERES; i++) {
+        spheres.push(new Sphere(scene));
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 }
 
-function resetParticle(idx, positions) {
-  const i3 = idx * 3;
-  // 항상 화면 중앙 하단에서 생성
-  positions[i3] = (Math.random() - 0.5) * 40;
-  positions[i3+1] = -90 + (Math.random() - 0.5) * 20;
-  positions[i3+2] = (Math.random() - 0.5) * 40;
+// [핵심] 얼굴 위치 기반 구 배치 로직
+function updateSpheresState(facesList) {
+    const count = Math.min(facesList.length, MAX_SPHERES);
+    
+    // 3D 공간의 실제 보이는 영역 계산 (카메라 거리 기준)
+    const dist = camera.position.z;
+    const vFOV = THREE.Math.degToRad(camera.fov); // 수직 시야각(라디안)
+    const visibleHeight = 2 * Math.tan(vFOV / 2) * dist; // 실제 보이는 높이
+    const visibleWidth = visibleHeight * camera.aspect; // 실제 보이는 너비
 
-  if (particlesData[idx]) { 
-      particlesData[idx].life = 0; 
-      particlesData[idx].vx = 0; 
-      particlesData[idx].vy = 0; 
-  }
-}
+    for (let i = 0; i < count; i++) {
+        const faceData = facesList[i];
+        spheres[i].updateData(faceData);
+        
+        // 1. 이미지 상의 얼굴 중심점 계산 (0~640, 0~480)
+        const rect = faceData.rect;
+        const centerX = (rect.min_x + rect.max_x) / 2;
+        const centerY = (rect.min_y + rect.max_y) / 2;
 
-function updateAura(data) {
-  if (!data.emotions) return;
-  currentEmotions = data.emotions;
-  isActive = true; 
-  targetOpacity = 1.0; // 짠! 하고 나타남
-  targetSpeed = 1.0;
+        // 2. 정규화 (중앙 기준 -0.5 ~ +0.5) 및 좌표계 반전
+        // X축 반전: 셀카 모드(미러링) 대응
+        // Y축 반전: 이미지(아래가 +) vs 3D(위가 +) 대응
+        const normX = -((centerX / IMG_W) - 0.5);
+        const normY = -((centerY / IMG_H) - 0.5);
+
+        // 3. 3D 월드 좌표로 변환
+        const targetX = normX * visibleWidth;
+        const targetY = normY * visibleHeight;
+
+        // 구 위치 이동
+        spheres[i].mesh.position.x = targetX;
+        spheres[i].mesh.position.y = targetY;
+        // Z축은 얼굴 크기에 따라 약간의 깊이감을 줘도 좋음 (선택사항, 현재는 고정)
+        spheres[i].mesh.position.z = 0; 
+    }
+
+    for (let i = count; i < MAX_SPHERES; i++) {
+        spheres[i].hide();
+    }
 }
-function setAnalyzingState(isAnalyzing) { 
-    if(isAnalyzing) { 
-        targetOpacity = 0.3; // 분석 중엔 희미하게
-        targetSpeed = 3.0; 
-    } 
-}
-function setBackgroundState() { targetOpacity = 0.2; targetSpeed = 0.5; }
 
 function animate() {
-  requestAnimationFrame(animate);
-  const positions = points.geometry.attributes.position.array;
-  const colors = points.geometry.attributes.color.array;
-  const { joy, sorrow, anger, surprise } = currentEmotions;
-  
-  time += 0.008; 
-  // 투명도 부드러운 전환
-  points.material.opacity += (targetOpacity - points.material.opacity) * 0.05;
-
-  let tr=0.5, tg=0.5, tb=0.8; let upwardForce=0.3; let turbulence=0.5; let spread=1.0;           
-  if (isActive) {
-    if (joy>0.1) { tr=1.0; tg=0.9; tb=0.2; upwardForce=1.0+joy; turbulence=1.0; spread=2.0; }
-    if (anger>0.1) { tr=1.0; tg=0.1; tb=0.1; upwardForce=0.5; turbulence=4.0; spread=3.0; }
-    if (sorrow>0.1) { tr=0.1; tg=0.3; tb=0.9; upwardForce=0.1; turbulence=0.2; spread=0.5; }
-    if (surprise>0.1) { tr=1.0; tg=1.0; tb=1.0; upwardForce=1.5; spread=4.0; }
-  }
-
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const p = particlesData[i]; const idx = i * 3;
-    p.life += 0.01 * targetSpeed;
-    if (p.life > p.maxLife) resetParticle(i, positions);
-
-    let cx = positions[idx]; let cy = positions[idx+1];
-    
-    // 내장 노이즈 함수 사용
-    const nX = noise.noise(cx * 0.01, time + p.seed);
-    const nY = noise.noise(cy * 0.01, time + p.seed);
-    
-    p.vx += nX * turbulence * 0.05; 
-    p.vy += upwardForce * 0.05; 
-    p.vx += (cx * 0.001) * spread; 
-
-    p.vx *= 0.95; p.vy *= 0.95; 
-    
-    positions[idx] += p.vx * targetSpeed; 
-    positions[idx+1] += p.vy * targetSpeed; 
-    
-    const opacity = Math.sin(p.life / p.maxLife * Math.PI); 
-    
-    colors[idx] += (tr - colors[idx]) * 0.05; 
-    colors[idx+1] += (tg - colors[idx+1]) * 0.05; 
-    colors[idx+2] += (tb - colors[idx+2]) * 0.05;
-
-    // 점 자체 색상을 어둡게 해서 투명도 효과
-    colors[idx] = Math.max(0, colors[idx] * opacity); 
-    colors[idx+1] = Math.max(0, colors[idx+1] * opacity); 
-    colors[idx+2] = Math.max(0, colors[idx+2] * opacity);
-  }
-  
-  points.geometry.attributes.position.needsUpdate = true;
-  points.geometry.attributes.color.needsUpdate = true;
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    time += 0.005;
+    spheres.forEach(s => s.animate(time));
+    renderer.render(scene, camera);
 }
 
 initThree(); 
 animate();
 </script>
-</body>
-</html>
