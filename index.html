@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Deep Digital Sphere</title>
+  <title>Deep Digital Sphere - Spinning Edition</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
     
@@ -154,22 +154,16 @@ scanBtn.addEventListener("click", async () => {
   retryBtn.style.display = "none";
   infoText.textContent = "표정을 공간 좌표로 변환 중...";
   
-  // 모든 구를 '분석 중' 상태로 (희미하게)
   spheres.forEach(s => s.setAnalyzing(true));
 
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  
-  // 서버 분석 해상도(640x480)에 맞춤 -> 좌표 매핑 정확도 향상
   canvas.width = 640;
   canvas.height = 480;
-  
-  ctx.save();
-  ctx.scale(-1, 1); // 좌우 반전 (거울모드)
+  ctx.save(); ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  // 기본 기기 정보 수집 (저장용)
   const basicMeta = { device: navigator.userAgent, timestamp: new Date().toString() };
 
   canvas.toBlob(async blob => {
@@ -184,11 +178,10 @@ scanBtn.addEventListener("click", async () => {
       
       if (data.status === "ok" && data.face_count > 0) {
         infoText.textContent = "";
-        // 얼굴 리스트를 받아 구 위치 업데이트
         updateSpheresState(data.faces_list);
       } else {
         infoText.textContent = "얼굴을 찾을 수 없습니다.";
-        updateSpheresState([]); // 모두 숨김
+        updateSpheresState([]); 
       }
     } catch (e) { 
       console.error(e); 
@@ -196,7 +189,6 @@ scanBtn.addEventListener("click", async () => {
       updateSpheresState([]);
     } 
     finally {
-      // 분석 상태 해제
       spheres.forEach(s => s.setAnalyzing(false));
       setTimeout(() => { retryBtn.style.display = "block"; }, 2000);
     }
@@ -206,7 +198,6 @@ scanBtn.addEventListener("click", async () => {
 retryBtn.addEventListener("click", () => {
   resetIdleTimer();
   showScreen(cameraScreen);
-  // 배경 모드로 전환
   spheres.forEach(s => s.setBackground());
   videoElement.play();
 });
@@ -221,19 +212,15 @@ function showScreen(target) {
 }
 
 
-/* ================= [2] Three.js: Multi-Sphere System ================= */
+/* ================= [2] Three.js: Multi-Sphere System (Spinning Edition) ================= */
 let scene, camera, renderer;
 let time = 0;
-const MAX_SPHERES = 6; // 최대 6명까지
+const MAX_SPHERES = 6; 
 let spheres = []; 
-
-// 분석 이미지 기준 크기 (좌표 매핑용)
-const IMG_W = 640;
-const IMG_H = 480;
+const IMG_W = 640; const IMG_H = 480;
 
 class Sphere {
     constructor(scene) {
-        // 입자 수: 4000개 (다수 렌더링 성능 최적화)
         this.particleCount = 4000;
         this.radius = 70; 
         this.particlesData = [];
@@ -243,6 +230,9 @@ class Sphere {
         this.targetOpacity = 0.0;
         this.currentOpacity = 0.0;
         
+        // [NEW] 회전 속도를 저장할 변수
+        this.rotationSpeed = { x: 0, y: 0.002, z: 0 }; 
+
         this._initMesh(scene);
     }
 
@@ -256,7 +246,6 @@ class Sphere {
             const x = this.radius * Math.cos( theta ) * Math.sin( phi );
             const y = this.radius * Math.sin( theta ) * Math.sin( phi );
             const z = this.radius * Math.cos( phi );
-
             posArray[i*3] = x; posArray[i*3+1] = y; posArray[i*3+2] = z;
             this.particlesData.push({ ox: x, oy: y, oz: z, seed: Math.random() * 100 });
             colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
@@ -271,7 +260,11 @@ class Sphere {
         });
         
         this.mesh = new THREE.Points(geo, mat);
-        scene.add(this.mesh);
+
+        // [NEW] 2중 구조: Group(고개기울기 담당) -> Mesh(자전 담당)
+        this.group = new THREE.Group();
+        this.group.add(this.mesh);
+        scene.add(this.group); // group을 씬에 추가
     }
 
     updateData(faceData) {
@@ -284,7 +277,6 @@ class Sphere {
     hide() {
         this.isActive = false;
         this.targetOpacity = 0.0;
-        // 감정 초기화
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
     }
 
@@ -292,11 +284,9 @@ class Sphere {
     setBackground() { if(this.isActive) this.targetOpacity = 0.2; }
 
     animate(time) {
-        // 투명도 애니메이션
         this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.05;
         this.mesh.material.opacity = this.currentOpacity;
 
-        // 안 보이면 연산 생략
         if (this.currentOpacity < 0.01) return;
 
         const positions = this.mesh.geometry.attributes.position.array;
@@ -304,15 +294,47 @@ class Sphere {
         const { joy, sorrow, anger, surprise } = this.emotions;
         const { pan, tilt, boxSize } = this.pose;
 
-        // 1. 고개 각도 반영 (회전)
-        this.mesh.rotation.y += (pan * 0.8 - this.mesh.rotation.y) * 0.05;
-        this.mesh.rotation.x += (-tilt * 0.8 - this.mesh.rotation.x) * 0.05;
-        
-        // 2. 얼굴 크기 반영 (Scale)
-        const targetScale = 0.8 + (boxSize * 0.5);
-        this.mesh.scale.setScalar(this.mesh.scale.x + (targetScale - this.mesh.scale.x) * 0.05);
+        // --- [NEW] 1. 고개 기울기 반영 (Group 회전) ---
+        // Lerp로 부드럽게 기울임
+        this.group.rotation.y += (pan * 0.8 - this.group.rotation.y) * 0.05;
+        this.group.rotation.x += (-tilt * 0.8 - this.group.rotation.x) * 0.05;
 
-        // 3. 감정 파라미터
+        // --- [NEW] 2. 감정 기반 지속 회전 (Mesh 자전) ---
+        let targetSX = 0, targetSY = 0.002, targetSZ = 0; // 기본 느린 자전
+        const baseSpeed = 0.02;
+
+        if (this.isActive) {
+            if (joy > 0.1) {
+                // 기쁨: Y축 중심 빠른 회전 (팽이처럼)
+                targetSY = baseSpeed * (1 + joy * 3);
+            } else if (anger > 0.1) {
+                // 분노: X, Z축 중심 거친 텀블링
+                targetSX = baseSpeed * (1 + anger * 4);
+                targetSZ = baseSpeed * (0.5 + anger * 2);
+            } else if (sorrow > 0.1) {
+                // 슬픔: 매우 느려짐
+                targetSY = baseSpeed * 0.05;
+            } else if (surprise > 0.1) {
+                // 놀람: 적당히 빠름
+                targetSY = baseSpeed * (1 + surprise);
+            }
+        }
+
+        // 회전 속도 부드럽게 전환 (Lerp)
+        this.rotationSpeed.x += (targetSX - this.rotationSpeed.x) * 0.05;
+        this.rotationSpeed.y += (targetSY - this.rotationSpeed.y) * 0.05;
+        this.rotationSpeed.z += (targetSZ - this.rotationSpeed.z) * 0.05;
+
+        // Mesh에 회전 적용 (지속적으로 더해줌)
+        this.mesh.rotation.x += this.rotationSpeed.x;
+        this.mesh.rotation.y += this.rotationSpeed.y;
+        this.mesh.rotation.z += this.rotationSpeed.z;
+        
+        // 3. 얼굴 크기 반영 (Scale) - Group 전체 크기 조절
+        const targetScale = 0.8 + (boxSize * 0.5);
+        this.group.scale.setScalar(this.group.scale.x + (targetScale - this.group.scale.x) * 0.05);
+
+        // 4. 파티클 내부 애니메이션 (노이즈 & 색상)
         let tr=0.5, tg=0.5, tb=0.8; 
         let noiseIntensity = 0.5; let breathingSpeed = 1.0; let pulse = 0.0;          
 
@@ -323,7 +345,6 @@ class Sphere {
             if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; noiseIntensity = 5.0; pulse = surprise * 25; }
         }
 
-        // 4. 입자 움직임 계산
         for (let i = 0; i < this.particleCount; i++) {
             const idx = i * 3;
             const p = this.particlesData[i];
@@ -338,7 +359,6 @@ class Sphere {
             let finalY = y + ny * (distortion + pulse);
             let finalZ = z + nz * (distortion + pulse);
 
-            // 슬픔: 아래로 처짐
             if (sorrow > 0.2) finalY -= Math.abs(n) * (sorrow * 30);
 
             positions[idx] = finalX; positions[idx+1] = finalY; positions[idx+2] = finalZ;
@@ -356,7 +376,6 @@ function initThree() {
     const container = document.getElementById("container");
     scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
     
-    // 카메라는 넓게 보기 위해 멀리 배치
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
     camera.position.z = 600; 
 
@@ -365,7 +384,6 @@ function initThree() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // 최대 개수만큼 구 생성
     for (let i = 0; i < MAX_SPHERES; i++) {
         spheres.push(new Sphere(scene));
     }
@@ -377,12 +395,10 @@ function initThree() {
     });
 }
 
-// [핵심] 서버의 얼굴 좌표를 3D 공간 좌표로 매핑하는 함수
+// [핵심] 얼굴 좌표 매핑 (Group 위치 이동)
 function updateSpheresState(facesList) {
     const count = Math.min(facesList.length, MAX_SPHERES);
     
-    // 3D 화면의 실제 가시 영역 계산 (Z=0 평면 기준)
-    // Three.js 카메라 거리와 FOV를 이용해 화면의 너비/높이를 구함
     const dist = camera.position.z;
     const vFOV = THREE.Math.degToRad(camera.fov); 
     const visibleHeight = 2 * Math.tan(vFOV / 2) * dist;
@@ -392,28 +408,22 @@ function updateSpheresState(facesList) {
         const faceData = facesList[i];
         spheres[i].updateData(faceData);
         
-        // 1. 얼굴 사각형 중심점 (0~640, 0~480)
         const rect = faceData.rect;
         const centerX = (rect.min_x + rect.max_x) / 2;
         const centerY = (rect.min_y + rect.max_y) / 2;
 
-        // 2. 정규화 (-0.5 ~ 0.5) 및 좌표계 보정
-        // X축: 좌우반전 (미러링) -> -를 붙여줌
-        // Y축: 캔버스(위가0) vs 3D(중앙이0, 위가+) -> -를 붙여줌
         const normX = -((centerX / IMG_W) - 0.5);
         const normY = -((centerY / IMG_H) - 0.5);
 
-        // 3. 3D 좌표로 변환
         const targetX = normX * visibleWidth;
         const targetY = normY * visibleHeight;
 
-        // 위치 적용
-        spheres[i].mesh.position.x = targetX;
-        spheres[i].mesh.position.y = targetY;
-        spheres[i].mesh.position.z = 0;
+        // [NEW] Mesh 대신 Group의 위치를 이동시킴
+        spheres[i].group.position.x = targetX;
+        spheres[i].group.position.y = targetY;
+        spheres[i].group.position.z = 0;
     }
 
-    // 인식 안 된 나머지 구는 숨김
     for (let i = count; i < MAX_SPHERES; i++) {
         spheres[i].hide();
     }
