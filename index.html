@@ -4,19 +4,33 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Deep Digital Sphere AR</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Pretendard:wght@300;500;700&display=swap" rel="stylesheet">
+
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-    /* 배경: 카메라 */
+    /* 배경 어둡게 처리 (Dimming Layer) */
+    #dim-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 80; /* UI보다는 아래, 캔버스보다는 위 */
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    #dim-overlay.active { opacity: 1; }
+
+    /* 카메라 */
     #cam {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1); z-index: 1;
-      filter: brightness(0.6); 
+      filter: brightness(0.7) contrast(1.1); 
     }
 
-    /* 전경: Three.js */
+    /* Three.js */
     #three-canvas {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       z-index: 2; pointer-events: none;
@@ -25,55 +39,105 @@
     /* UI 레이어 */
     #ui-layer {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 10; pointer-events: none;
+      z-index: 90; pointer-events: none; /* 터치 통과 */
       display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-      padding: 20px;
+      padding: 30px; box-sizing: border-box;
+    }
+
+    #brand-title {
+      font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
+      margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
     }
 
     #status-bar {
-      margin-top: 10px; padding: 8px 20px;
-      background: rgba(0, 0, 0, 0.5); border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: #fff; font-size: 14px; letter-spacing: 1px;
-      backdrop-filter: blur(5px);
-    }
-
-    #warning-msg {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
-      color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
-      display: none; backdrop-filter: blur(10px); text-align: center;
+      margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+      transition: opacity 0.5s;
     }
 
     /* 하단 버튼 그룹 */
     #controls { 
-      margin-bottom: 30px; pointer-events: auto; 
-      display: flex; gap: 15px; /* 버튼 사이 간격 */
+      margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
     }
     
     button.main-btn {
-      padding: 16px 40px; border: 1px solid rgba(255, 255, 255, 0.4);
-      background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 16px; letter-spacing: 2px;
+      padding: 14px 30px; border: 1px solid rgba(255, 255, 255, 0.5);
+      background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-      box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
       transition: all 0.3s;
     }
-    button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.2); }
+    button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
 
-    /* 종료 버튼 (빨간색 포인트) */
+    /* 종료 버튼 */
     button.exit-btn {
       padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
       background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-      display: none; /* 평소엔 숨김 */
+      display: none;
     }
     button.exit-btn:active { transform: scale(0.95); background: rgba(150, 0, 0, 0.6); }
+
+    /* 셔터 플래시 */
+    #flash-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #fff; z-index: 9999; pointer-events: none;
+      opacity: 0; transition: opacity 0.1s ease-out;
+    }
+
+    /* === 폴라로이드 스타일 === */
+    .polaroid {
+      position: fixed;
+      top: 50%; left: 50%; /* 초기 생성 위치: 정중앙 */
+      width: 280px; 
+      background: #fff;
+      padding: 15px 15px 50px 15px; /* 하단 여백 확보 */
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+      z-index: 95; /* Dim layer 위 */
+      /* 초기 변환: 중앙 정렬 + 약간 확대 */
+      transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
+      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); /* 부드러운 이동 */
+      opacity: 0;
+    }
+    
+    .polaroid.animate-to-corner {
+      /* 자바스크립트로 계산된 위치로 이동 */
+      transform: translate(0, 0) scale(0.4) rotate(-5deg) !important;
+      /* 중요: 이동할 때는 기준점이 좌상단이 되도록 JS에서 top/left를 변경해줄 예정 */
+      transition: all 0.4s cubic-bezier(0.5, 0, 0, 1); /* 휙! 이동 (0.2~0.4s) */
+    }
+
+    .polaroid img {
+      width: 100%; height: auto; display: block; background: #000;
+      border: 1px solid #eee;
+    }
+
+    /* 필기체 텍스트 (Pure Joy 등) */
+    .polaroid-text {
+      font-family: 'Caveat', cursive;
+      font-size: 32px; color: #222;
+      text-align: center; margin-top: 15px;
+      line-height: 1.0;
+    }
+
+    /* 하단 워터마크 */
+    .polaroid-watermark {
+      font-family: 'Pretendard', sans-serif;
+      font-size: 8px; color: #888;
+      text-align: center; margin-top: 12px;
+      line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
+      border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
+    }
+
+    /* 갤러리 컨테이너 (쌓이는 곳) - 위치만 잡아둠 */
+    #gallery-area {
+      position: absolute; bottom: 120px; right: 20px;
+      pointer-events: none;
+    }
 
     /* 시작 화면 */
     #cover {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; z-index: 20;
-      display: flex; justify-content: center; align-items: center;
+      background: #000; z-index: 100;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
       transition: opacity 0.8s;
     }
     #startBtn {
@@ -83,12 +147,24 @@
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
+    #warning-msg {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
+      color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
+      display: none; backdrop-filter: blur(10px); text-align: center;
+    }
+
     #snap { display: none; }
   </style>
 </head>
 <body>
 
+<div id="flash-overlay"></div>
+
+<div id="dim-overlay"></div>
+
 <div id="cover">
+  <div style="font-size: 12px; color: #888; margin-bottom: 20px;">DIGITAL AURA PROJECT</div>
   <button id="startBtn">TOUCH TO START</button>
 </div>
 
@@ -98,12 +174,15 @@
 </div>
 
 <div id="ui-layer">
-  <div id="status-bar">Ready</div>
+  <div id="brand-title">DIGITAL AURA</div>
+  <div id="status-bar">Ready to Scan</div>
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
   
+  <div id="gallery-area"></div>
+
   <div id="controls">
     <button id="actionBtn" class="main-btn" style="display:none;">PAUSE</button>
-    <button id="manualExitBtn" class="exit-btn">EXIT</button>
+    <button id="manualExitBtn" class="exit-btn">RESET</button>
   </div>
 </div>
 
@@ -151,14 +230,20 @@ const startBtn = document.getElementById("startBtn");
 const cover = document.getElementById("cover");
 const actionBtn = document.getElementById("actionBtn");
 const manualExitBtn = document.getElementById("manualExitBtn");
+const flashOverlay = document.getElementById("flash-overlay");
+const dimOverlay = document.getElementById("dim-overlay");
 
 let stream = null;
 let isRunning = false;
 let isProcessing = false;
 let loopInterval = null;
 let lastFaceDetectedTime = 0; 
-const RESET_TIMEOUT = 10000; // 10초 타임아웃
-const MIN_FACE_SIZE = 0.15;  // 화면의 15%보다 작으면 인식 안 함
+let snapshotCooldown = false;
+let photoCount = 0; // 한 세션에 찍힌 사진 수
+let createdPolaroids = []; // 세션 종료 시 삭제용
+
+const RESET_TIMEOUT = 10000; 
+const MIN_FACE_SIZE = 0.15;  
 
 startBtn.addEventListener("click", async () => {
   try {
@@ -169,14 +254,14 @@ startBtn.addEventListener("click", async () => {
     cover.style.opacity = 0;
     setTimeout(() => { cover.style.display = "none"; }, 800);
     actionBtn.style.display = "block";
-    manualExitBtn.style.display = "none"; // 처음엔 숨김
+    manualExitBtn.style.display = "none";
     
     startARLoop();
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
 function resetSystem() {
-  console.log("System Reset");
+  console.log("Session Reset");
   clearInterval(loopInterval);
   isRunning = false;
   isProcessing = false;
@@ -196,6 +281,11 @@ function resetSystem() {
   statusBar.textContent = "Ready";
   
   updateSpheresState([]);
+
+  // 갤러리 초기화
+  createdPolaroids.forEach(el => el.remove());
+  createdPolaroids = [];
+  photoCount = 0;
 }
 
 function startARLoop() {
@@ -203,34 +293,102 @@ function startARLoop() {
   isRunning = true;
   lastFaceDetectedTime = Date.now();
   actionBtn.textContent = "PAUSE";
-  manualExitBtn.style.display = "none"; // 재시작하면 EXIT 버튼 숨김
+  manualExitBtn.style.display = "none";
   
   loopInterval = setInterval(() => {
     if (!isProcessing) {
       captureAndAnalyze();
     }
-  }, 3000); // 3초 간격
+  }, 3000); 
 }
 
-// PAUSE / RESUME 토글
 actionBtn.addEventListener("click", () => {
   if (isRunning) {
-    // 멈춤 상태
     clearInterval(loopInterval);
     isRunning = false;
     actionBtn.textContent = "RESUME";
     statusBar.textContent = "Paused";
-    manualExitBtn.style.display = "block"; // [NEW] EXIT 버튼 보이기
+    manualExitBtn.style.display = "block";
   } else {
-    // 재시작
     startARLoop();
   }
 });
 
-// 수동 종료 버튼
 manualExitBtn.addEventListener("click", () => {
   resetSystem();
 });
+
+// [핵심] 폴라로이드 생성 및 애니메이션
+function triggerSnapshot(label) {
+  if(snapshotCooldown) return;
+  snapshotCooldown = true;
+  photoCount++;
+
+  // 1. 캡쳐
+  const captureCanvas = document.createElement("canvas");
+  captureCanvas.width = 640;
+  captureCanvas.height = 480;
+  const ctx = captureCanvas.getContext("2d");
+  
+  // 비디오 (좌우반전)
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(videoElement, -640, 0, 640, 480);
+  ctx.restore();
+  // 오라
+  ctx.drawImage(renderer.domElement, 0, 0, 640, 480);
+
+  // 2. DOM 요소 생성
+  const polaroid = document.createElement('div');
+  polaroid.className = 'polaroid';
+  polaroid.innerHTML = `
+    <img src="${captureCanvas.toDataURL("image/jpeg")}">
+    <div class="polaroid-text">${label}</div>
+    <div class="polaroid-watermark">
+      2026 ADD+ 도리를 찾아서<br>
+      Emotional Sphere
+    </div>
+  `;
+  document.body.appendChild(polaroid);
+  createdPolaroids.push(polaroid);
+
+  // 3. 애니메이션 시퀀스
+  
+  // Step A: Flash & Appear (Center)
+  flashOverlay.style.opacity = 1;
+  setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
+  
+  // 배경 어둡게
+  dimOverlay.classList.add('active');
+  polaroid.style.opacity = 1; // 보이게 함
+
+  // Step B: 0.5초 대기 후 이동
+  setTimeout(() => {
+    // 배경 밝게
+    dimOverlay.classList.remove('active');
+
+    // 목표 위치 계산 (오른쪽 하단에서 왼쪽으로 쌓임)
+    // 갤러리 기준점: bottom: 120px, right: 20px
+    // 화면 전체 width, height 기준 절대 좌표 계산 필요
+    const offsetX = (photoCount - 1) * 110; // 겹쳐서 쌓이게 (간격 110px)
+    
+    // 타겟 위치: 화면 오른쪽 끝에서 offsetX 만큼 왼쪽
+    const targetRight = 20 + offsetX;
+    const targetBottom = 120;
+
+    // CSS로 이동 (fixed position 변경)
+    // transform translate를 해제하고 top/left/right/bottom으로 고정해야 함
+    polaroid.style.top = 'auto';
+    polaroid.style.left = 'auto';
+    polaroid.style.right = targetRight + 'px';
+    polaroid.style.bottom = targetBottom + 'px';
+    polaroid.style.transform = `scale(0.4) rotate(${Math.random() * 10 - 5}deg)`; // 축소 & 랜덤 회전
+    
+    // 쿨타임 해제 (2초 후)
+    setTimeout(() => { snapshotCooldown = false; }, 2000);
+
+  }, 500); // 0.5초 동안 중앙에 유지
+}
 
 async function captureAndAnalyze() {
   isProcessing = true;
@@ -239,9 +397,7 @@ async function captureAndAnalyze() {
   const ctx = canvas.getContext("2d");
   canvas.width = 640;
   canvas.height = 480;
-  
-  ctx.save();
-  ctx.scale(-1, 1);
+  ctx.save(); ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
@@ -256,37 +412,47 @@ async function captureAndAnalyze() {
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Error");
       const data = await res.json();
-      
       const now = Date.now();
 
-      // [NEW] 얼굴 크기 필터링 (너무 작으면 무시)
       let validFaces = [];
       if (data.status === "ok" && data.faces_list) {
         validFaces = data.faces_list.filter(f => f.pose.boxSize >= MIN_FACE_SIZE);
       }
 
       if (validFaces.length > 0) {
-        // 유효한 얼굴 있음
         lastFaceDetectedTime = now;
         warningMsg.style.display = "none";
-        statusBar.textContent = `${validFaces.length} Aura(s) Active`;
+        statusBar.textContent = "Scanning Aura...";
         updateSpheresState(validFaces);
-      } else {
-        // 얼굴 없음 (또는 너무 작음)
-        statusBar.textContent = "Searching...";
-        updateSpheresState([]); // 구체 숨김
-        warningMsg.style.display = "block";
+
+        // [감정 피크 체크 & 라벨링]
+        // 가장 강한 감정을 찾음
+        let maxEmotionVal = 0;
+        let maxEmotionLabel = "";
         
-        // 10초 타임아웃 체크
+        validFaces.forEach(f => {
+          if (f.emotions.joy > maxEmotionVal) { maxEmotionVal = f.emotions.joy; maxEmotionLabel = "Pure Joy"; }
+          if (f.emotions.surprise > maxEmotionVal) { maxEmotionVal = f.emotions.surprise; maxEmotionLabel = "Pure Surprise"; }
+          if (f.emotions.anger > maxEmotionVal) { maxEmotionVal = f.emotions.anger; maxEmotionLabel = "Pure Anger"; }
+          if (f.emotions.sorrow > maxEmotionVal) { maxEmotionVal = f.emotions.sorrow; maxEmotionLabel = "Deep Sorrow"; }
+        });
+
+        // 0.9 이상일 때만 촬영
+        if (maxEmotionVal > 0.9 && !snapshotCooldown) {
+          triggerSnapshot(maxEmotionLabel);
+          statusBar.textContent = "Moment Captured!";
+        }
+
+      } else {
+        statusBar.textContent = "Searching Face...";
+        updateSpheresState([]); 
+        warningMsg.style.display = "block";
         if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
           resetSystem();
         }
       }
-    } catch (e) {
-      console.log("Skip");
-    } finally {
-      isProcessing = false;
-    }
+    } catch (e) { console.log("Skip"); } 
+    finally { isProcessing = false; }
   }, "image/jpeg", 0.8);
 }
 
@@ -301,29 +467,22 @@ const IMG_W = 640; const IMG_H = 480;
 class Sphere {
     constructor(scene) {
         this.particleCount = 4000; 
-        
-        // [수정] 기본 반지름 120 (얼굴 덮을 만큼 큼)
         this.radius = 120; 
-        
         this.particlesData = [];
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
         this.pose = { pan: 0, tilt: 0, boxSize: 0.5 };
-        
         this.targetPos = new THREE.Vector3(0, 0, 0);
         this.currentPos = new THREE.Vector3(0, 0, 0);
-        
         this.isActive = false;
         this.targetOpacity = 0.0;
         this.currentOpacity = 0.0;
         this.rotationSpeed = { x: 0, y: 0.002, z: 0 }; 
-
         this._initMesh(scene);
     }
 
     _initMesh(scene) {
         const posArray = new Float32Array(this.particleCount * 3);
         const colorArray = new Float32Array(this.particleCount * 3);
-
         for(let i=0; i<this.particleCount; i++) {
             const phi = Math.acos( -1 + ( 2 * i ) / this.particleCount );
             const theta = Math.sqrt( this.particleCount * Math.PI ) * phi;
@@ -334,7 +493,6 @@ class Sphere {
             this.particlesData.push({ ox: x, oy: y, oz: z, seed: Math.random() * 100 });
             colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
         }
-        
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
         geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
@@ -342,7 +500,6 @@ class Sphere {
             size: 2.5, vertexColors: true, transparent: true, opacity: 0, 
             blending: THREE.AdditiveBlending, depthWrite: false 
         });
-        
         this.mesh = new THREE.Points(geo, mat);
         this.group = new THREE.Group();
         this.group.add(this.mesh);
@@ -365,10 +522,8 @@ class Sphere {
     animate(time) {
         this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.1;
         this.mesh.material.opacity = this.currentOpacity;
-
         if (this.currentOpacity < 0.01) return;
 
-        // [수정] 이동 속도 매우 느리게 (0.02)
         this.currentPos.lerp(this.targetPos, 0.02); 
         this.group.position.copy(this.currentPos);
 
@@ -397,9 +552,8 @@ class Sphere {
         this.mesh.rotation.y += this.rotationSpeed.y;
         this.mesh.rotation.z += this.rotationSpeed.z;
         
-        // [수정] 크기 확대 비율 증가 (x4.0)
-        // 얼굴이 조금만 가까워져도 아주 크게 보임
-        const targetScale = 0.5 + (boxSize * 4.0); 
+        // [수정] 스케일 1.8배
+        const targetScale = 0.5 + (boxSize * 1.8); 
         const currentScale = this.group.scale.y; 
         const nextScale = currentScale + (targetScale - currentScale) * 0.05;
         this.group.scale.set(nextScale * squashX, nextScale, nextScale);
@@ -449,7 +603,7 @@ function initThree() {
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
     camera.position.z = 600; 
 
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
