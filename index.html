@@ -13,7 +13,7 @@
     #cam {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1); z-index: 1;
-      filter: brightness(0.7); /* 오라 강조를 위해 배경 어둡게 */
+      filter: brightness(0.6); /* 오라가 더 잘 보이게 배경을 조금 더 어둡게 */
     }
 
     /* 전경: Three.js */
@@ -30,7 +30,6 @@
       padding: 20px;
     }
 
-    /* 상단 상태바 */
     #status-bar {
       margin-top: 10px; padding: 8px 20px;
       background: rgba(0, 0, 0, 0.5); border-radius: 30px;
@@ -39,17 +38,13 @@
       backdrop-filter: blur(5px);
     }
 
-    /* [NEW] 경고 메시지 (얼굴 없음) */
     #warning-msg {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
       color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
-      display: none; /* 평소엔 숨김 */
-      backdrop-filter: blur(10px);
-      text-align: center;
+      display: none; backdrop-filter: blur(10px); text-align: center;
     }
 
-    /* 하단 버튼 */
     #controls { margin-bottom: 30px; pointer-events: auto; }
     
     button.main-btn {
@@ -60,7 +55,7 @@
     }
     button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.2); }
 
-    /* 시작 화면 (가림막) */
+    /* 시작 화면 */
     #cover {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #000; z-index: 20;
@@ -74,7 +69,6 @@
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-    /* 데이터 처리용 캔버스 */
     #snap { display: none; }
   </style>
 </head>
@@ -92,7 +86,6 @@
 <div id="ui-layer">
   <div id="status-bar">Ready</div>
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
-  
   <div id="controls">
     <button id="actionBtn" class="main-btn" style="display:none;">PAUSE</button>
   </div>
@@ -134,7 +127,7 @@ SimplexNoise.prototype.noise = function(xin, yin) {
 const noise = new SimplexNoise();
 
 
-/* ================= [1] Logic & Control ================= */
+/* ================= [1] System Logic ================= */
 const videoElement = document.getElementById("cam");
 const statusBar = document.getElementById("status-bar");
 const warningMsg = document.getElementById("warning-msg");
@@ -146,66 +139,52 @@ let stream = null;
 let isRunning = false;
 let isProcessing = false;
 let loopInterval = null;
+let lastFaceDetectedTime = 0; 
+const RESET_TIMEOUT = 10000;  
 
-// [NEW] 타임아웃 관련 변수
-let lastFaceDetectedTime = 0; // 마지막으로 얼굴 본 시간
-const RESET_TIMEOUT = 10000;  // 10초 (10000ms)
-
-// 1. 시작 버튼
 startBtn.addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     videoElement.srcObject = stream;
     videoElement.play();
     
-    // UI 전환
     cover.style.opacity = 0;
     setTimeout(() => { cover.style.display = "none"; }, 800);
     actionBtn.style.display = "block";
     
-    // AR 시작
     startARLoop();
-    
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
-// 2. 시스템 리셋 (초기화면으로)
 function resetSystem() {
-  console.log("System Reset due to inactivity");
-  
-  // 루프 정지
+  console.log("System Reset");
   clearInterval(loopInterval);
   isRunning = false;
   isProcessing = false;
 
-  // 카메라 정지 (스트림 해제)
   if (stream) {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
   }
   videoElement.srcObject = null;
 
-  // UI 초기화
   cover.style.display = "flex";
-  // 약간의 딜레이 후 페이드인
   setTimeout(() => { cover.style.opacity = 1; }, 10);
   
   actionBtn.style.display = "none";
   warningMsg.style.display = "none";
   statusBar.textContent = "Ready";
   
-  // 구체 숨기기
   updateSpheresState([]);
 }
 
-// 3. AR 루프 시작
 function startARLoop() {
   if (isRunning) return;
   isRunning = true;
-  lastFaceDetectedTime = Date.now(); // 시작할 때 시간 갱신
+  lastFaceDetectedTime = Date.now();
   actionBtn.textContent = "PAUSE";
   
-  // 1초(1000ms) 간격으로 요청
+  // 1초마다 요청 (비용 감당 가능 시)
   loopInterval = setInterval(() => {
     if (!isProcessing) {
       captureAndAnalyze();
@@ -213,7 +192,6 @@ function startARLoop() {
   }, 1000); 
 }
 
-// 4. 멈춤/재시작 버튼
 actionBtn.addEventListener("click", () => {
   if (isRunning) {
     clearInterval(loopInterval);
@@ -225,7 +203,6 @@ actionBtn.addEventListener("click", () => {
   }
 });
 
-// 5. 캡쳐 및 분석
 async function captureAndAnalyze() {
   isProcessing = true;
 
@@ -254,26 +231,20 @@ async function captureAndAnalyze() {
       const now = Date.now();
 
       if (data.status === "ok" && data.face_count > 0) {
-        // 얼굴 찾음!
-        lastFaceDetectedTime = now; // 시간 갱신
-        warningMsg.style.display = "none"; // 경고 숨김
+        lastFaceDetectedTime = now;
+        warningMsg.style.display = "none";
         statusBar.textContent = `${data.face_count} Aura(s) Active`;
         updateSpheresState(data.faces_list);
       } else {
-        // 얼굴 없음
         statusBar.textContent = "Searching...";
-        updateSpheresState([]); // 구체 숨김
-        
-        // 경고 메시지 표시
+        updateSpheresState([]);
         warningMsg.style.display = "block";
-        
-        // 10초 지났는지 확인
         if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
           resetSystem();
         }
       }
     } catch (e) {
-      console.log("Skip frame");
+      console.log("Skip");
     } finally {
       isProcessing = false;
     }
@@ -281,7 +252,7 @@ async function captureAndAnalyze() {
 }
 
 
-/* ================= [2] Three.js Logic ================= */
+/* ================= [2] Three.js Logic (Slow & Big) ================= */
 let scene, camera, renderer;
 let time = 0;
 const MAX_SPHERES = 6; 
@@ -290,8 +261,12 @@ const IMG_W = 640; const IMG_H = 480;
 
 class Sphere {
     constructor(scene) {
-        this.particleCount = 3500; 
-        this.radius = 60; 
+        this.particleCount = 4000; 
+        
+        // [수정 1] 구의 기본 반지름 2배 확대 (60 -> 120)
+        // 얼굴 전체를 덮을 만큼 커집니다.
+        this.radius = 120; 
+        
         this.particlesData = [];
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
         this.pose = { pan: 0, tilt: 0, boxSize: 0.5 };
@@ -355,7 +330,9 @@ class Sphere {
 
         if (this.currentOpacity < 0.01) return;
 
-        this.currentPos.lerp(this.targetPos, 0.05); 
+        // [수정 2] 이동 속도 대폭 감속 (0.05 -> 0.02)
+        // 1초에 도착하지 못하고 계속 질질 끌려오는 느낌을 줍니다.
+        this.currentPos.lerp(this.targetPos, 0.02); 
         this.group.position.copy(this.currentPos);
 
         const positions = this.mesh.geometry.attributes.position.array;
@@ -383,7 +360,9 @@ class Sphere {
         this.mesh.rotation.y += this.rotationSpeed.y;
         this.mesh.rotation.z += this.rotationSpeed.z;
         
-        const targetScale = 0.8 + (boxSize * 0.5);
+        // [수정 3] 얼굴 크기에 따른 스케일링 범위 조정
+        // 박스가 작아도 기본 크기는 확보하도록 조정
+        const targetScale = 0.6 + (boxSize * 1.0); 
         const currentScale = this.group.scale.y; 
         const nextScale = currentScale + (targetScale - currentScale) * 0.05;
         this.group.scale.set(nextScale * squashX, nextScale, nextScale);
