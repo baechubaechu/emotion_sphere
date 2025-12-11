@@ -1,11 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Deep Digital Sphere</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
+    
+    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
+    
+    /* 비상 탈출 버튼 (우측 상단, 투명도 낮음) */
+    #emergency-btn {
+      position: fixed; top: 15px; right: 15px; width: 40px; height: 40px; z-index: 9999;
+      color: rgba(255, 255, 255, 0.2); font-size: 24px; display: flex; justify-content: center; align-items: center;
+      cursor: pointer; border-radius: 50%; transition: all 0.3s;
+    }
+    #emergency-btn:active { color: #fff; background: rgba(255,255,255,0.2); }
+
+    /* 화면 전환 공통 */
+    .screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      transition: opacity 0.5s ease; z-index: 10; pointer-events: none;
+    }
+    .screen.active { opacity: 1; pointer-events: auto; }
+    .screen.hidden { opacity: 0; pointer-events: none; display: none; }
+
+    /* 버튼 스타일 */
+    button.main-btn {
+      padding: 16px 40px; border: 1px solid rgba(255, 255, 255, 0.4);
+      background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 16px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+    }
+    button.main-btn:active { transform: scale(0.95); }
+
+    /* 1. 시작 화면 */
+    #start-screen { z-index: 30; background: #000; } 
+    #startBtn { border: none; background: transparent; font-size: 22px; letter-spacing: 4px; animation: pulse 2s infinite; color: #fff; cursor: pointer; }
+    @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+    /* 2. 카메라 화면 */
+    #camera-screen { justify-content: flex-end; padding-bottom: 60px; background: rgba(0,0,0,0.3); }
+    #camera-frame {
+      position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
+      width: 300px; height: 300px; border: 1px solid rgba(255,255,255,0.3); background: #000; overflow: hidden;
+    }
+    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.8; }
+    #face-guide {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 60%; height: 70%; border: 2px dashed rgba(255,255,255,0.5); border-radius: 50%;
+    }
+    
+    /* 3. 결과 화면 */
+    #retry-screen { justify-content: flex-end; padding-bottom: 60px; }
+    #info-text { position: absolute; top: 15%; width: 100%; text-align: center; color: rgba(255,255,255,0.7); }
+    
+    /* 캡쳐용 캔버스 (숨김) */
+    #snap { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="emergency-btn">⟳</div>
+<div id="container"></div>
+
+<div id="start-screen" class="screen active">
+  <button id="startBtn">TOUCH TO START</button>
+</div>
+
+<div id="camera-screen" class="screen hidden">
+  <div id="camera-frame">
+    <video id="cam" autoplay playsinline muted></video>
+    <div id="face-guide"></div>
+  </div>
+  <button id="scanBtn" class="main-btn">SCAN AURA</button>
+</div>
+
+<div id="retry-screen" class="screen hidden">
+  <div id="info-text">데이터를 공간화하고 있습니다...</div>
+  <button id="retryBtn" class="main-btn">↺ RE-SCAN</button>
+</div>
+
+<canvas id="snap"></canvas>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
+// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
-/* ================= [0] 유틸리티 ================= */
+/* ================= [0] 유틸리티 (비상탈출, 노이즈) ================= */
 document.getElementById('emergency-btn').addEventListener('click', () => {
-  if(confirm("재시작하시겠습니까?")) location.reload();
+  if(confirm("시스템을 재시작하시겠습니까?")) location.reload();
 });
 
 const SimplexNoise = function() {
@@ -36,7 +122,7 @@ SimplexNoise.prototype.noise = function(xin, yin) {
 const noise = new SimplexNoise();
 
 
-/* ================= [1] UI 로직 ================= */
+/* ================= [1] UI 및 카메라 로직 ================= */
 const startScreen = document.getElementById("start-screen");
 const cameraScreen = document.getElementById("camera-screen");
 const retryScreen = document.getElementById("retry-screen");
@@ -66,19 +152,24 @@ scanBtn.addEventListener("click", async () => {
   showScreen(null);
   retryScreen.classList.remove("hidden"); retryScreen.classList.add("active");
   retryBtn.style.display = "none";
-  infoText.textContent = "공간 속의 자아를 찾는 중...";
+  infoText.textContent = "표정을 공간 좌표로 변환 중...";
   
+  // 모든 구를 '분석 중' 상태로 (희미하게)
   spheres.forEach(s => s.setAnalyzing(true));
 
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
-  // 서버 분석 기준 해상도 (640x480)에 맞춤
+  
+  // 서버 분석 해상도(640x480)에 맞춤 -> 좌표 매핑 정확도 향상
   canvas.width = 640;
   canvas.height = 480;
-  ctx.save(); ctx.scale(-1, 1);
+  
+  ctx.save();
+  ctx.scale(-1, 1); // 좌우 반전 (거울모드)
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
+  // 기본 기기 정보 수집 (저장용)
   const basicMeta = { device: navigator.userAgent, timestamp: new Date().toString() };
 
   canvas.toBlob(async blob => {
@@ -93,10 +184,11 @@ scanBtn.addEventListener("click", async () => {
       
       if (data.status === "ok" && data.face_count > 0) {
         infoText.textContent = "";
+        // 얼굴 리스트를 받아 구 위치 업데이트
         updateSpheresState(data.faces_list);
       } else {
         infoText.textContent = "얼굴을 찾을 수 없습니다.";
-        updateSpheresState([]); 
+        updateSpheresState([]); // 모두 숨김
       }
     } catch (e) { 
       console.error(e); 
@@ -104,6 +196,7 @@ scanBtn.addEventListener("click", async () => {
       updateSpheresState([]);
     } 
     finally {
+      // 분석 상태 해제
       spheres.forEach(s => s.setAnalyzing(false));
       setTimeout(() => { retryBtn.style.display = "block"; }, 2000);
     }
@@ -113,6 +206,7 @@ scanBtn.addEventListener("click", async () => {
 retryBtn.addEventListener("click", () => {
   resetIdleTimer();
   showScreen(cameraScreen);
+  // 배경 모드로 전환
   spheres.forEach(s => s.setBackground());
   videoElement.play();
 });
@@ -127,22 +221,24 @@ function showScreen(target) {
 }
 
 
-/* ================= [2] Three.js: Multi-Sphere System (Max 6 & Position Mapping) ================= */
+/* ================= [2] Three.js: Multi-Sphere System ================= */
 let scene, camera, renderer;
 let time = 0;
-const MAX_SPHERES = 6; 
+const MAX_SPHERES = 6; // 최대 6명까지
 let spheres = []; 
-// 서버 분석 기준 해상도
+
+// 분석 이미지 기준 크기 (좌표 매핑용)
 const IMG_W = 640;
 const IMG_H = 480;
 
 class Sphere {
     constructor(scene) {
+        // 입자 수: 4000개 (다수 렌더링 성능 최적화)
         this.particleCount = 4000;
         this.radius = 70; 
         this.particlesData = [];
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
-        this.pose = { pan: 0, tilt: 0, size: 0.5 };
+        this.pose = { pan: 0, tilt: 0, boxSize: 0.5 };
         this.isActive = false;
         this.targetOpacity = 0.0;
         this.currentOpacity = 0.0;
@@ -188,6 +284,7 @@ class Sphere {
     hide() {
         this.isActive = false;
         this.targetOpacity = 0.0;
+        // 감정 초기화
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
     }
 
@@ -195,9 +292,11 @@ class Sphere {
     setBackground() { if(this.isActive) this.targetOpacity = 0.2; }
 
     animate(time) {
+        // 투명도 애니메이션
         this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.05;
         this.mesh.material.opacity = this.currentOpacity;
 
+        // 안 보이면 연산 생략
         if (this.currentOpacity < 0.01) return;
 
         const positions = this.mesh.geometry.attributes.position.array;
@@ -205,11 +304,15 @@ class Sphere {
         const { joy, sorrow, anger, surprise } = this.emotions;
         const { pan, tilt, boxSize } = this.pose;
 
+        // 1. 고개 각도 반영 (회전)
         this.mesh.rotation.y += (pan * 0.8 - this.mesh.rotation.y) * 0.05;
         this.mesh.rotation.x += (-tilt * 0.8 - this.mesh.rotation.x) * 0.05;
+        
+        // 2. 얼굴 크기 반영 (Scale)
         const targetScale = 0.8 + (boxSize * 0.5);
         this.mesh.scale.setScalar(this.mesh.scale.x + (targetScale - this.mesh.scale.x) * 0.05);
 
+        // 3. 감정 파라미터
         let tr=0.5, tg=0.5, tb=0.8; 
         let noiseIntensity = 0.5; let breathingSpeed = 1.0; let pulse = 0.0;          
 
@@ -220,6 +323,7 @@ class Sphere {
             if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; noiseIntensity = 5.0; pulse = surprise * 25; }
         }
 
+        // 4. 입자 움직임 계산
         for (let i = 0; i < this.particleCount; i++) {
             const idx = i * 3;
             const p = this.particlesData[i];
@@ -234,6 +338,7 @@ class Sphere {
             let finalY = y + ny * (distortion + pulse);
             let finalZ = z + nz * (distortion + pulse);
 
+            // 슬픔: 아래로 처짐
             if (sorrow > 0.2) finalY -= Math.abs(n) * (sorrow * 30);
 
             positions[idx] = finalX; positions[idx+1] = finalY; positions[idx+2] = finalZ;
@@ -251,6 +356,7 @@ function initThree() {
     const container = document.getElementById("container");
     scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
     
+    // 카메라는 넓게 보기 위해 멀리 배치
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
     camera.position.z = 600; 
 
@@ -259,6 +365,7 @@ function initThree() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
+    // 최대 개수만큼 구 생성
     for (let i = 0; i < MAX_SPHERES; i++) {
         spheres.push(new Sphere(scene));
     }
@@ -270,42 +377,43 @@ function initThree() {
     });
 }
 
-// [핵심] 얼굴 위치 기반 구 배치 로직
+// [핵심] 서버의 얼굴 좌표를 3D 공간 좌표로 매핑하는 함수
 function updateSpheresState(facesList) {
     const count = Math.min(facesList.length, MAX_SPHERES);
     
-    // 3D 공간의 실제 보이는 영역 계산 (카메라 거리 기준)
+    // 3D 화면의 실제 가시 영역 계산 (Z=0 평면 기준)
+    // Three.js 카메라 거리와 FOV를 이용해 화면의 너비/높이를 구함
     const dist = camera.position.z;
-    const vFOV = THREE.Math.degToRad(camera.fov); // 수직 시야각(라디안)
-    const visibleHeight = 2 * Math.tan(vFOV / 2) * dist; // 실제 보이는 높이
-    const visibleWidth = visibleHeight * camera.aspect; // 실제 보이는 너비
+    const vFOV = THREE.Math.degToRad(camera.fov); 
+    const visibleHeight = 2 * Math.tan(vFOV / 2) * dist;
+    const visibleWidth = visibleHeight * camera.aspect;
 
     for (let i = 0; i < count; i++) {
         const faceData = facesList[i];
         spheres[i].updateData(faceData);
         
-        // 1. 이미지 상의 얼굴 중심점 계산 (0~640, 0~480)
+        // 1. 얼굴 사각형 중심점 (0~640, 0~480)
         const rect = faceData.rect;
         const centerX = (rect.min_x + rect.max_x) / 2;
         const centerY = (rect.min_y + rect.max_y) / 2;
 
-        // 2. 정규화 (중앙 기준 -0.5 ~ +0.5) 및 좌표계 반전
-        // X축 반전: 셀카 모드(미러링) 대응
-        // Y축 반전: 이미지(아래가 +) vs 3D(위가 +) 대응
+        // 2. 정규화 (-0.5 ~ 0.5) 및 좌표계 보정
+        // X축: 좌우반전 (미러링) -> -를 붙여줌
+        // Y축: 캔버스(위가0) vs 3D(중앙이0, 위가+) -> -를 붙여줌
         const normX = -((centerX / IMG_W) - 0.5);
         const normY = -((centerY / IMG_H) - 0.5);
 
-        // 3. 3D 월드 좌표로 변환
+        // 3. 3D 좌표로 변환
         const targetX = normX * visibleWidth;
         const targetY = normY * visibleHeight;
 
-        // 구 위치 이동
+        // 위치 적용
         spheres[i].mesh.position.x = targetX;
         spheres[i].mesh.position.y = targetY;
-        // Z축은 얼굴 크기에 따라 약간의 깊이감을 줘도 좋음 (선택사항, 현재는 고정)
-        spheres[i].mesh.position.z = 0; 
+        spheres[i].mesh.position.z = 0;
     }
 
+    // 인식 안 된 나머지 구는 숨김
     for (let i = count; i < MAX_SPHERES; i++) {
         spheres[i].hide();
     }
@@ -321,3 +429,5 @@ function animate() {
 initThree(); 
 animate();
 </script>
+</body>
+</html>
