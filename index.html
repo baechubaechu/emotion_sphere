@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Pretendard:wght@300;500;700&display=swap" rel="stylesheet">
 
   <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; /* 스와이프 위해 기본 동작 방지 */ }
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
@@ -51,6 +51,7 @@
       transition: opacity 0.5s; min-height: 20px;
     }
 
+    /* Controls */
     #controls { 
       margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
     }
@@ -63,116 +64,98 @@
     }
     button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
 
-    button.exit-btn {
-      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
-      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-    }
-    button.exit-btn:active { transform: scale(0.95); background: rgba(150, 0, 0, 0.6); }
-
-    /* Flash Effect */
+    /* Flash */
     #flash-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #fff; z-index: 9999; pointer-events: none;
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* Polaroid Style */
+    /* Polaroid Style (Main Screen Animation) */
     .polaroid {
-      position: fixed;
-      top: 50%; left: 50%;
-      width: 280px; 
-      background: #fff;
-      padding: 15px 15px 50px 15px;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-      z-index: 95;
+      position: fixed; top: 50%; left: 50%; width: 280px; 
+      background: #fff; padding: 15px 15px 50px 15px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6); z-index: 95;
       transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
-      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
-      opacity: 0;
+      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); opacity: 0;
     }
-    
     .polaroid.animate-to-corner {
       transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
       transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
     }
-
-    .polaroid img {
-      width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee;
-    }
-
+    .polaroid img { width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; }
     .polaroid-text {
-      font-family: 'Caveat', cursive;
-      font-size: 28px; color: #222;
+      font-family: 'Caveat', cursive; font-size: 28px; color: #222;
       text-align: center; margin-top: 15px; line-height: 1.1;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-
     .polaroid-watermark {
-      font-family: 'Pretendard', sans-serif;
-      font-size: 8px; color: #888;
-      text-align: center; margin-top: 12px;
-      line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
+      font-family: 'Pretendard', sans-serif; font-size: 8px; color: #888;
+      text-align: center; margin-top: 12px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
       border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
     }
 
     /* === Gallery Screen === */
     #gallery-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(10, 10, 10, 0.95);
-      z-index: 200; /* UI보다 위 */
-      display: none; flex-direction: column; justify-content: center; align-items: center;
+      background: rgba(10, 10, 10, 0.98); /* 배경 더 어둡게 */
+      z-index: 200; display: none; flex-direction: column; justify-content: center; align-items: center;
       opacity: 0; transition: opacity 0.5s;
     }
     #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
 
-    /* Carousel Container */
+    /* Gallery Viewport & Container (For smooth sliding) */
+    #gallery-viewport {
+        width: 100%; height: 60%; overflow: hidden;
+        display: flex; align-items: center; /* 수직 중앙 정렬 */
+        position: relative;
+    }
     #gallery-container {
-      width: 100%; height: 60%;
       display: flex;
       align-items: center;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      padding: 0 50vw; /* 중앙 정렬용 패딩 */
-      box-sizing: border-box;
-      gap: 40px;
-      /* 마우스 드래그를 위해 터치 액션 제어 */
-      cursor: grab;
+      /* 부드러운 이동을 위한 트랜지션 */
+      transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
+      will-change: transform;
+      padding-left: 50%; /* 초기 중앙 정렬을 위한 패딩 */
     }
-    #gallery-container:active { cursor: grabbing; }
-    /* Scrollbar hide */
-    #gallery-container::-webkit-scrollbar { display: none; }
 
-    /* Gallery Item */
+    /* [수정] Gallery Item Styling */
     .gallery-item {
       flex: 0 0 auto;
-      scroll-snap-align: center;
-      width: 300px;
-      background: #fff;
-      padding: 15px 15px 60px 15px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-      transform: scale(0.9);
-      transition: transform 0.3s;
-      user-select: none; /* 드래그 시 선택 방지 */
+      width: 300px; /* 고정 너비 */
+      background: #fff; padding: 15px 15px 60px 15px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      margin-right: 40px; /* 아이템 간격 */
+      
+      /* [핵심] 기본 상태: 작게 (0.5배), 약간 투명하게 */
+      transform: scale(0.5); 
+      opacity: 0.5;
+      z-index: 1;
+      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); /* 크기 변화 부드럽게 */
     }
-    .gallery-item img { width: 100%; display: block; border: 1px solid #eee; pointer-events: none; }
+    /* [핵심] 활성 상태 (중앙): 원래 크기 (1.0배 -> 2배 커짐), 불투명 */
+    .gallery-item.active {
+      transform: scale(1.0);
+      opacity: 1;
+      z-index: 10;
+      box-shadow: 0 30px 60px rgba(0,0,0,1); /* 그림자 강조 */
+    }
+
+    /* [수정] 갤러리 이미지 필터 적용 (어둡게 눌러서 오라 강조) */
+    .gallery-item img { 
+        width: 100%; display: block; border: 1px solid #eee; 
+        filter: brightness(0.6) contrast(1.3) saturate(0.9);
+    }
     
-    #gallery-controls {
-      margin-top: 40px; display: flex; gap: 20px;
+    #gallery-controls { margin-top: 40px; display: flex; gap: 20px; }
+    button.reset-btn {
+      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
+      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
     }
 
-    /* 타임아웃 경고창 */
-    #timeout-warning {
-      position: absolute; top: 20%; 
-      background: rgba(255, 0, 0, 0.8); color: #fff;
-      padding: 20px 40px; border-radius: 10px;
-      font-size: 20px; text-align: center;
-      display: none; z-index: 300;
-      box-shadow: 0 0 30px rgba(255,0,0,0.5);
-      animation: pulse-red 1s infinite;
-    }
-    @keyframes pulse-red { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-
-    /* Start Screen */
+    /* Start Screen & Warning */
     #start-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #000; z-index: 100;
@@ -185,14 +168,12 @@
       cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
     #warning-msg {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
       color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
       display: none; backdrop-filter: blur(10px); text-align: center;
     }
-
     #snap { display: none; }
   </style>
 </head>
@@ -215,8 +196,8 @@
   <div id="brand-title">EMOTIONAL SPHERE</div>
   <div id="status-bar"></div>
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
-  
   <div id="controls">
+    <button id="pauseBtn" class="main-btn" style="display:none;">PAUSE</button>
     <button id="galleryBtn" class="main-btn" style="display:none;">VIEW GALLERY</button>
   </div>
 </div>
@@ -224,19 +205,14 @@
 <div id="gallery-screen">
   <div id="brand-title" style="margin-bottom:20px;">CAPTURED MOMENTS</div>
   
-  <div id="timeout-warning">
-    세션이 곧 종료됩니다<br>
-    <span id="timeout-count" style="font-size:40px; font-weight:bold;">10</span><br>
-    계속하시려면 화면을 터치하세요
+  <div id="gallery-viewport">
+      <div id="gallery-container">
+        </div>
   </div>
 
-  <div id="gallery-container">
-    <div style="color:#666; font-size:14px;">No photos yet</div>
-  </div>
-  
   <div id="gallery-controls">
     <button id="resumeBtn" class="main-btn">RESUME</button>
-    <button id="resetBtn" class="exit-btn">END SESSION</button>
+    <button id="resetBtn" class="reset-btn">RESET (END SESSION)</button>
   </div>
 </div>
 
@@ -283,16 +259,14 @@ const warningMsg = document.getElementById("warning-msg");
 const startBtn = document.getElementById("startBtn");
 const startScreen = document.getElementById("start-screen");
 
-// Main Controls
+const pauseBtn = document.getElementById("pauseBtn");
 const galleryBtn = document.getElementById("galleryBtn");
 
-// Gallery Controls
 const galleryScreen = document.getElementById("gallery-screen");
+const galleryViewport = document.getElementById("gallery-viewport"); // [NEW]
 const galleryContainer = document.getElementById("gallery-container");
 const resumeBtn = document.getElementById("resumeBtn");
 const resetBtn = document.getElementById("resetBtn");
-const timeoutWarning = document.getElementById("timeout-warning");
-const timeoutCount = document.getElementById("timeout-count");
 
 const flashOverlay = document.getElementById("flash-overlay");
 const dimOverlay = document.getElementById("dim-overlay");
@@ -305,15 +279,14 @@ let lastFaceDetectedTime = 0;
 let snapshotCooldown = false;
 let photoCount = 0; 
 let createdPolaroids = []; 
-let capturedImagesData = []; 
+let capturedImagesData = [];
 
-// 타임아웃 관련 변수
-const AR_TIMEOUT_LIMIT = 10000; // AR 모드에서 얼굴 없을 때 10초
-let galleryIdleTimer = null;
-let galleryCountdownTimer = null;
-const GALLERY_IDLE_LIMIT = 50000; // 50초 (경고 전)
-const GALLERY_WARNING_DURATION = 10000; // 10초 (경고 후 종료)
+// [NEW] 갤러리 캐러셀 관련 변수
+let currentGalleryIndex = 0;
+let touchStartX = 0;
+let touchEndX = 0;
 
+const RESET_TIMEOUT = 10000; 
 const MIN_FACE_SIZE = 0.15;  
 
 // Start
@@ -326,6 +299,7 @@ startBtn.addEventListener("click", async () => {
     startScreen.style.opacity = 0;
     setTimeout(() => { startScreen.style.display = "none"; }, 800);
     
+    pauseBtn.style.display = "block";
     galleryBtn.style.display = "block";
     statusBar.textContent = "Ready";
     
@@ -333,12 +307,10 @@ startBtn.addEventListener("click", async () => {
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
-// Full Reset (End Session)
+// Full Reset
 function resetSystem() {
   console.log("Session Reset");
   clearInterval(loopInterval);
-  clearGalleryTimers(); // 갤러리 타이머 정리
-
   isRunning = false;
   isProcessing = false;
 
@@ -349,10 +321,10 @@ function resetSystem() {
   videoElement.srcObject = null;
 
   startScreen.style.display = "flex";
-  galleryScreen.classList.remove("active"); 
-  timeoutWarning.style.display = "none"; // 경고창 숨김
+  galleryScreen.classList.remove("active");
   setTimeout(() => { startScreen.style.opacity = 1; }, 10);
   
+  pauseBtn.style.display = "none";
   galleryBtn.style.display = "none";
   warningMsg.style.display = "none";
   statusBar.textContent = "";
@@ -363,15 +335,16 @@ function resetSystem() {
   createdPolaroids = [];
   capturedImagesData = [];
   photoCount = 0;
-  galleryContainer.innerHTML = '<div style="color:#666; font-size:14px;">No photos yet</div>';
+  galleryContainer.innerHTML = '';
+  galleryContainer.style.transform = 'translateX(0)'; // 리셋
 }
 
 function startARLoop() {
   if (isRunning) return;
   isRunning = true;
   lastFaceDetectedTime = Date.now();
+  pauseBtn.textContent = "PAUSE";
   
-  // 0.7초 (700ms) 간격
   loopInterval = setInterval(() => {
     if (!isProcessing) {
       captureAndAnalyze();
@@ -379,113 +352,134 @@ function startARLoop() {
   }, 700); 
 }
 
-// View Gallery (Open)
+// Pause/Resume
+pauseBtn.addEventListener("click", () => {
+  if (isRunning) {
+    clearInterval(loopInterval);
+    isRunning = false;
+    pauseBtn.textContent = "RESUME";
+    statusBar.textContent = "Paused";
+  } else {
+    startARLoop();
+  }
+});
+
+// ================= [Gallery Logic (Enhanced)] =================
+
+// 갤러리 열기
 galleryBtn.addEventListener("click", () => {
   if (isRunning) {
     clearInterval(loopInterval);
     isRunning = false;
+    pauseBtn.textContent = "RESUME";
   }
   
-  // 갤러리 DOM
   galleryContainer.innerHTML = "";
   if (capturedImagesData.length === 0) {
-    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px;">NO PHOTOS CAPTURED</div>';
+    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px; margin-left: -50%;">NO PHOTOS CAPTURED</div>';
+    galleryContainer.style.transform = 'translateX(0)';
   } else {
-    capturedImagesData.forEach(data => {
+    capturedImagesData.forEach((data, index) => {
       const item = document.createElement('div');
       item.className = 'gallery-item';
+      // 클릭 시 해당 아이템으로 이동 기능 추가 (옵션)
+      item.onclick = () => {
+          currentGalleryIndex = index;
+          updateGalleryPosition();
+      }
       item.innerHTML = `
         <img src="${data.src}">
         <div class="polaroid-text">${data.label}</div>
         <div class="polaroid-watermark">
-          2026 ADD+ 도리를 찾아서<br>
-          Emotional Sphere
+          2026 ADD+ 도리를 찾아서<br>Emotional Sphere
         </div>
       `;
       galleryContainer.appendChild(item);
     });
+    
+    // 가장 최근 사진(마지막)을 처음에 보여줌
+    currentGalleryIndex = capturedImagesData.length - 1;
+    updateGalleryPosition();
   }
 
   galleryScreen.classList.add("active");
-  startGalleryTimer(); // 갤러리 타이머 시작
 });
 
-// Resume from Gallery
+// [핵심] 갤러리 위치 및 상태 업데이트 함수
+function updateGalleryPosition() {
+    const items = document.querySelectorAll('.gallery-item');
+    if (items.length === 0) return;
+
+    // 1. Active 클래스 업데이트 (크기 변화 트리거)
+    items.forEach((item, index) => {
+        item.classList.remove('active');
+        if (index === currentGalleryIndex) {
+            item.classList.add('active');
+        }
+    });
+
+    // 2. 컨테이너 이동 계산 (중앙 정렬)
+    // 아이템 너비 300px + 마진 40px = 340px. 
+    // padding-left: 50%가 있으므로, 현재 인덱스만큼 왼쪽으로 이동 + 중앙 보정 필요.
+    // 간단하게 아이템 하나의 전체 폭만큼 이동시킴.
+    const itemTotalWidth = 340; // 300 + 40
+    const moveX = -(currentGalleryIndex * itemTotalWidth);
+    
+    // 중앙 보정: 활성 아이템의 절반 너비(150px)만큼 더 왼쪽으로 가야 정확히 중앙에 옴 (padding 50% 기준)
+    const offset = -150; 
+    
+    galleryContainer.style.transform = `translateX(${moveX + offset}px)`;
+}
+
+// 스와이프 이벤트 리스너 (터치 및 마우스)
+galleryViewport.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+}, false);
+
+galleryViewport.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+}, false);
+
+galleryViewport.addEventListener('mousedown', e => {
+    touchStartX = e.screenX;
+}, false);
+
+galleryViewport.addEventListener('mouseup', e => {
+    touchEndX = e.screenX;
+    handleSwipe();
+}, false);
+
+
+function handleSwipe() {
+    const threshold = 50; // 최소 스와이프 거리
+    if (touchEndX < touchStartX - threshold) {
+        // 왼쪽으로 스와이프 -> 다음 사진 (인덱스 증가)
+        if (currentGalleryIndex < capturedImagesData.length - 1) {
+            currentGalleryIndex++;
+            updateGalleryPosition();
+        }
+    }
+    if (touchEndX > touchStartX + threshold) {
+        // 오른쪽으로 스와이프 -> 이전 사진 (인덱스 감소)
+        if (currentGalleryIndex > 0) {
+            currentGalleryIndex--;
+            updateGalleryPosition();
+        }
+    }
+}
+
 resumeBtn.addEventListener("click", () => {
-  clearGalleryTimers(); // 갤러리 타이머 해제
   galleryScreen.classList.remove("active");
   startARLoop();
 });
 
-// Reset from Gallery
 resetBtn.addEventListener("click", () => {
   resetSystem();
 });
 
 
-/* === Gallery Logic: Timeout & Drag Scroll === */
-
-// 1. 타임아웃 로직
-function startGalleryTimer() {
-  clearGalleryTimers();
-  timeoutWarning.style.display = "none";
-  
-  // 50초 후 경고 시작
-  galleryIdleTimer = setTimeout(() => {
-    showGalleryWarning();
-  }, GALLERY_IDLE_LIMIT);
-}
-
-function showGalleryWarning() {
-  timeoutWarning.style.display = "block";
-  let count = 10;
-  timeoutCount.textContent = count;
-  
-  // 1초마다 카운트다운
-  galleryCountdownTimer = setInterval(() => {
-    count--;
-    timeoutCount.textContent = count;
-    if (count <= 0) {
-      clearInterval(galleryCountdownTimer);
-      resetSystem(); // 강제 종료
-    }
-  }, 1000);
-}
-
-function clearGalleryTimers() {
-  if (galleryIdleTimer) clearTimeout(galleryIdleTimer);
-  if (galleryCountdownTimer) clearInterval(galleryCountdownTimer);
-  timeoutWarning.style.display = "none";
-}
-
-// 2. 터치/클릭 감지 -> 타이머 리셋
-galleryScreen.addEventListener("touchstart", startGalleryTimer);
-galleryScreen.addEventListener("click", startGalleryTimer);
-galleryScreen.addEventListener("mousemove", startGalleryTimer); // 마우스 움직임도 감지
-
-// 3. 마우스 드래그 스크롤 (PC 테스트용)
-let isDown = false;
-let startX;
-let scrollLeft;
-
-galleryContainer.addEventListener('mousedown', (e) => {
-  isDown = true;
-  galleryContainer.style.cursor = 'grabbing';
-  startX = e.pageX - galleryContainer.offsetLeft;
-  scrollLeft = galleryContainer.scrollLeft;
-});
-galleryContainer.addEventListener('mouseleave', () => { isDown = false; galleryContainer.style.cursor = 'grab'; });
-galleryContainer.addEventListener('mouseup', () => { isDown = false; galleryContainer.style.cursor = 'grab'; });
-galleryContainer.addEventListener('mousemove', (e) => {
-  if (!isDown) return;
-  e.preventDefault();
-  const x = e.pageX - galleryContainer.offsetLeft;
-  const walk = (x - startX) * 2; // 스크롤 속도
-  galleryContainer.scrollLeft = scrollLeft - walk;
-});
-
-
-/* === Snapshot & Analysis === */
+// ================= [Snapshot & AR Logic] =================
 
 function triggerSnapshot(label) {
   if(snapshotCooldown) return;
@@ -504,31 +498,27 @@ function triggerSnapshot(label) {
   ctx.drawImage(renderer.domElement, 0, 0, 640, 480);
 
   const imgData = captureCanvas.toDataURL("image/jpeg");
+  
   capturedImagesData.push({ src: imgData, label: label });
 
-  // Main UI Polaroid
   const polaroid = document.createElement('div');
   polaroid.className = 'polaroid';
   polaroid.innerHTML = `
     <img src="${imgData}">
     <div class="polaroid-text">${label}</div>
     <div class="polaroid-watermark">
-      2026 ADD+ 도리를 찾아서<br>
-      Emotional Sphere
+      2026 ADD+ 도리를 찾아서<br>Emotional Sphere
     </div>
   `;
   document.body.appendChild(polaroid);
   createdPolaroids.push(polaroid);
 
-  // Flash
   flashOverlay.style.opacity = 1;
   setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
   
-  // Center Show
   dimOverlay.classList.add('active');
   polaroid.style.opacity = 1; 
 
-  // Move
   setTimeout(() => {
     dimOverlay.classList.remove('active');
 
@@ -602,8 +592,7 @@ async function captureAndAnalyze() {
       } else {
         updateSpheresState([]); 
         warningMsg.style.display = "block";
-        // AR 모드 타임아웃
-        if (now - lastFaceDetectedTime > AR_TIMEOUT_LIMIT) {
+        if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
           resetSystem();
         }
       }
