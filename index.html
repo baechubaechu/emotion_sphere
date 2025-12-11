@@ -13,7 +13,7 @@
     #cam {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1); z-index: 1;
-      filter: brightness(0.6); /* 오라가 더 잘 보이게 배경을 조금 더 어둡게 */
+      filter: brightness(0.6); 
     }
 
     /* 전경: Three.js */
@@ -45,15 +45,29 @@
       display: none; backdrop-filter: blur(10px); text-align: center;
     }
 
-    #controls { margin-bottom: 30px; pointer-events: auto; }
+    /* 하단 버튼 그룹 */
+    #controls { 
+      margin-bottom: 30px; pointer-events: auto; 
+      display: flex; gap: 15px; /* 버튼 사이 간격 */
+    }
     
     button.main-btn {
       padding: 16px 40px; border: 1px solid rgba(255, 255, 255, 0.4);
       background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 16px; letter-spacing: 2px;
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
       box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+      transition: all 0.3s;
     }
     button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.2); }
+
+    /* 종료 버튼 (빨간색 포인트) */
+    button.exit-btn {
+      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
+      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+      display: none; /* 평소엔 숨김 */
+    }
+    button.exit-btn:active { transform: scale(0.95); background: rgba(150, 0, 0, 0.6); }
 
     /* 시작 화면 */
     #cover {
@@ -86,8 +100,10 @@
 <div id="ui-layer">
   <div id="status-bar">Ready</div>
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
+  
   <div id="controls">
     <button id="actionBtn" class="main-btn" style="display:none;">PAUSE</button>
+    <button id="manualExitBtn" class="exit-btn">EXIT</button>
   </div>
 </div>
 
@@ -134,13 +150,15 @@ const warningMsg = document.getElementById("warning-msg");
 const startBtn = document.getElementById("startBtn");
 const cover = document.getElementById("cover");
 const actionBtn = document.getElementById("actionBtn");
+const manualExitBtn = document.getElementById("manualExitBtn");
 
 let stream = null;
 let isRunning = false;
 let isProcessing = false;
 let loopInterval = null;
 let lastFaceDetectedTime = 0; 
-const RESET_TIMEOUT = 10000;  
+const RESET_TIMEOUT = 10000; // 10초 타임아웃
+const MIN_FACE_SIZE = 0.15;  // 화면의 15%보다 작으면 인식 안 함
 
 startBtn.addEventListener("click", async () => {
   try {
@@ -151,6 +169,7 @@ startBtn.addEventListener("click", async () => {
     cover.style.opacity = 0;
     setTimeout(() => { cover.style.display = "none"; }, 800);
     actionBtn.style.display = "block";
+    manualExitBtn.style.display = "none"; // 처음엔 숨김
     
     startARLoop();
   } catch (e) { alert("카메라 권한이 필요합니다."); }
@@ -172,6 +191,7 @@ function resetSystem() {
   setTimeout(() => { cover.style.opacity = 1; }, 10);
   
   actionBtn.style.display = "none";
+  manualExitBtn.style.display = "none";
   warningMsg.style.display = "none";
   statusBar.textContent = "Ready";
   
@@ -183,24 +203,33 @@ function startARLoop() {
   isRunning = true;
   lastFaceDetectedTime = Date.now();
   actionBtn.textContent = "PAUSE";
+  manualExitBtn.style.display = "none"; // 재시작하면 EXIT 버튼 숨김
   
-  // 1초마다 요청 (비용 감당 가능 시)
   loopInterval = setInterval(() => {
     if (!isProcessing) {
       captureAndAnalyze();
     }
-  }, 1000); 
+  }, 3000); // 3초 간격
 }
 
+// PAUSE / RESUME 토글
 actionBtn.addEventListener("click", () => {
   if (isRunning) {
+    // 멈춤 상태
     clearInterval(loopInterval);
     isRunning = false;
     actionBtn.textContent = "RESUME";
     statusBar.textContent = "Paused";
+    manualExitBtn.style.display = "block"; // [NEW] EXIT 버튼 보이기
   } else {
+    // 재시작
     startARLoop();
   }
+});
+
+// 수동 종료 버튼
+manualExitBtn.addEventListener("click", () => {
+  resetSystem();
 });
 
 async function captureAndAnalyze() {
@@ -230,15 +259,25 @@ async function captureAndAnalyze() {
       
       const now = Date.now();
 
-      if (data.status === "ok" && data.face_count > 0) {
+      // [NEW] 얼굴 크기 필터링 (너무 작으면 무시)
+      let validFaces = [];
+      if (data.status === "ok" && data.faces_list) {
+        validFaces = data.faces_list.filter(f => f.pose.boxSize >= MIN_FACE_SIZE);
+      }
+
+      if (validFaces.length > 0) {
+        // 유효한 얼굴 있음
         lastFaceDetectedTime = now;
         warningMsg.style.display = "none";
-        statusBar.textContent = `${data.face_count} Aura(s) Active`;
-        updateSpheresState(data.faces_list);
+        statusBar.textContent = `${validFaces.length} Aura(s) Active`;
+        updateSpheresState(validFaces);
       } else {
+        // 얼굴 없음 (또는 너무 작음)
         statusBar.textContent = "Searching...";
-        updateSpheresState([]);
+        updateSpheresState([]); // 구체 숨김
         warningMsg.style.display = "block";
+        
+        // 10초 타임아웃 체크
         if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
           resetSystem();
         }
@@ -252,7 +291,7 @@ async function captureAndAnalyze() {
 }
 
 
-/* ================= [2] Three.js Logic (Slow & Big) ================= */
+/* ================= [2] Three.js Logic ================= */
 let scene, camera, renderer;
 let time = 0;
 const MAX_SPHERES = 6; 
@@ -263,8 +302,7 @@ class Sphere {
     constructor(scene) {
         this.particleCount = 4000; 
         
-        // [수정 1] 구의 기본 반지름 2배 확대 (60 -> 120)
-        // 얼굴 전체를 덮을 만큼 커집니다.
+        // [수정] 기본 반지름 120 (얼굴 덮을 만큼 큼)
         this.radius = 120; 
         
         this.particlesData = [];
@@ -330,8 +368,7 @@ class Sphere {
 
         if (this.currentOpacity < 0.01) return;
 
-        // [수정 2] 이동 속도 대폭 감속 (0.05 -> 0.02)
-        // 1초에 도착하지 못하고 계속 질질 끌려오는 느낌을 줍니다.
+        // [수정] 이동 속도 매우 느리게 (0.02)
         this.currentPos.lerp(this.targetPos, 0.02); 
         this.group.position.copy(this.currentPos);
 
@@ -360,9 +397,9 @@ class Sphere {
         this.mesh.rotation.y += this.rotationSpeed.y;
         this.mesh.rotation.z += this.rotationSpeed.z;
         
-        // [수정 3] 얼굴 크기에 따른 스케일링 범위 조정
-        // 박스가 작아도 기본 크기는 확보하도록 조정
-        const targetScale = 0.6 + (boxSize * 1.0); 
+        // [수정] 크기 확대 비율 증가 (x4.0)
+        // 얼굴이 조금만 가까워져도 아주 크게 보임
+        const targetScale = 0.5 + (boxSize * 4.0); 
         const currentScale = this.group.scale.y; 
         const nextScale = currentScale + (targetScale - currentScale) * 0.05;
         this.group.scale.set(nextScale * squashX, nextScale, nextScale);
