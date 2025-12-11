@@ -14,7 +14,7 @@
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-    /* 배경 어둡게 (Dimming) */
+    /* Dim Overlay */
     #dim-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.8);
@@ -22,20 +22,18 @@
     }
     #dim-overlay.active { opacity: 1; }
 
-    /* 카메라 화면 */
+    /* Camera & Canvas */
     #cam {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1); z-index: 1;
       filter: brightness(0.7) contrast(1.1); 
     }
-
-    /* Three.js 캔버스 */
     #three-canvas {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       z-index: 2; pointer-events: none;
     }
 
-    /* UI 레이어 */
+    /* Main UI Layer */
     #ui-layer {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       z-index: 90; pointer-events: none;
@@ -53,7 +51,7 @@
       transition: opacity 0.5s; min-height: 20px;
     }
 
-    /* 하단 버튼 그룹 위치 조정 (사진이랑 겹치지 않게 왼쪽으로 살짝 이동하거나 중앙 유지) */
+    /* Controls (Main Screen) */
     #controls { 
       margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
     }
@@ -66,22 +64,14 @@
     }
     button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
 
-    button.exit-btn {
-      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
-      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-      display: none;
-    }
-    button.exit-btn:active { transform: scale(0.95); background: rgba(150, 0, 0, 0.6); }
-
-    /* 플래시 */
+    /* Flash Effect */
     #flash-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #fff; z-index: 9999; pointer-events: none;
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* 폴라로이드 스타일 */
+    /* Polaroid Style */
     .polaroid {
       position: fixed;
       top: 50%; left: 50%;
@@ -90,14 +80,13 @@
       padding: 15px 15px 50px 15px;
       box-shadow: 0 15px 35px rgba(0,0,0,0.6);
       z-index: 95;
-      /* 초기: 중앙, 확대 */
       transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
       transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
       opacity: 0;
     }
     
     .polaroid.animate-to-corner {
-      /* 이동 시 축소 및 회전 */
+      /* 구석으로 이동 시 작아짐 */
       transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
       transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
     }
@@ -108,8 +97,9 @@
 
     .polaroid-text {
       font-family: 'Caveat', cursive;
-      font-size: 32px; color: #222;
-      text-align: center; margin-top: 15px; line-height: 1.0;
+      font-size: 28px; color: #222;
+      text-align: center; margin-top: 15px; line-height: 1.1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
     .polaroid-watermark {
@@ -120,6 +110,58 @@
       border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
     }
 
+    /* === [NEW] Gallery Screen === */
+    #gallery-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(10, 10, 10, 0.95);
+      z-index: 200; /* UI보다 위 */
+      display: none; flex-direction: column; justify-content: center; align-items: center;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
+
+    /* Carousel Container */
+    #gallery-container {
+      width: 100%; height: 60%;
+      display: flex;
+      align-items: center;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      padding: 0 50vw; /* 중앙 정렬을 위한 패딩 */
+      box-sizing: border-box;
+      gap: 40px;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Scrollbar hide */
+    #gallery-container::-webkit-scrollbar { display: none; }
+
+    /* Gallery Item (Polaroid Style inside Gallery) */
+    .gallery-item {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      width: 300px;
+      background: #fff;
+      padding: 15px 15px 60px 15px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      transform: scale(0.9);
+      transition: transform 0.3s;
+    }
+    /* Active Item Effect (Center) */
+    .gallery-item:hover, .gallery-item:active { transform: scale(1.0); }
+
+    .gallery-item img { width: 100%; display: block; border: 1px solid #eee; }
+    
+    #gallery-controls {
+      margin-top: 40px; display: flex; gap: 20px;
+    }
+    
+    button.reset-btn {
+      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
+      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+    }
+
+    /* Start Screen */
     #start-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #000; z-index: 100;
@@ -164,8 +206,19 @@
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
   
   <div id="controls">
-    <button id="actionBtn" class="main-btn" style="display:none;">PAUSE</button>
-    <button id="manualExitBtn" class="exit-btn">RESET</button>
+    <button id="pauseBtn" class="main-btn" style="display:none;">PAUSE</button>
+    <button id="galleryBtn" class="main-btn" style="display:none;">VIEW GALLERY</button>
+  </div>
+</div>
+
+<div id="gallery-screen">
+  <div id="brand-title" style="margin-bottom:20px;">CAPTURED MOMENTS</div>
+  <div id="gallery-container">
+    <div style="color:#666; font-size:14px;">No photos yet</div>
+  </div>
+  <div id="gallery-controls">
+    <button id="resumeBtn" class="main-btn">RESUME</button>
+    <button id="resetBtn" class="reset-btn">RESET (END SESSION)</button>
   </div>
 </div>
 
@@ -211,8 +264,17 @@ const statusBar = document.getElementById("status-bar");
 const warningMsg = document.getElementById("warning-msg");
 const startBtn = document.getElementById("startBtn");
 const startScreen = document.getElementById("start-screen");
-const actionBtn = document.getElementById("actionBtn");
-const manualExitBtn = document.getElementById("manualExitBtn");
+
+// Main Controls
+const pauseBtn = document.getElementById("pauseBtn");
+const galleryBtn = document.getElementById("galleryBtn");
+
+// Gallery Controls
+const galleryScreen = document.getElementById("gallery-screen");
+const galleryContainer = document.getElementById("gallery-container");
+const resumeBtn = document.getElementById("resumeBtn");
+const resetBtn = document.getElementById("resetBtn");
+
 const flashOverlay = document.getElementById("flash-overlay");
 const dimOverlay = document.getElementById("dim-overlay");
 
@@ -223,11 +285,13 @@ let loopInterval = null;
 let lastFaceDetectedTime = 0; 
 let snapshotCooldown = false;
 let photoCount = 0; 
-let createdPolaroids = []; 
+let createdPolaroids = []; // 메인 화면용 DOM
+let capturedImagesData = []; // 갤러리용 데이터 저장
 
 const RESET_TIMEOUT = 10000; 
 const MIN_FACE_SIZE = 0.15;  
 
+// Start
 startBtn.addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
@@ -236,14 +300,16 @@ startBtn.addEventListener("click", async () => {
     
     startScreen.style.opacity = 0;
     setTimeout(() => { startScreen.style.display = "none"; }, 800);
-    actionBtn.style.display = "block";
-    manualExitBtn.style.display = "none";
+    
+    pauseBtn.style.display = "block";
+    galleryBtn.style.display = "block";
     statusBar.textContent = "Ready";
     
     startARLoop();
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
+// Full Reset (End Session)
 function resetSystem() {
   console.log("Session Reset");
   clearInterval(loopInterval);
@@ -257,51 +323,98 @@ function resetSystem() {
   videoElement.srcObject = null;
 
   startScreen.style.display = "flex";
+  galleryScreen.classList.remove("active"); // 갤러리 닫기
   setTimeout(() => { startScreen.style.opacity = 1; }, 10);
   
-  actionBtn.style.display = "none";
-  manualExitBtn.style.display = "none";
+  pauseBtn.style.display = "none";
+  galleryBtn.style.display = "none";
   warningMsg.style.display = "none";
   statusBar.textContent = "";
   
   updateSpheresState([]);
 
+  // 데이터 초기화
   createdPolaroids.forEach(el => el.remove());
   createdPolaroids = [];
+  capturedImagesData = [];
   photoCount = 0;
+  galleryContainer.innerHTML = '<div style="color:#666; font-size:14px;">No photos yet</div>';
 }
 
 function startARLoop() {
   if (isRunning) return;
   isRunning = true;
   lastFaceDetectedTime = Date.now();
-  actionBtn.textContent = "PAUSE";
-  manualExitBtn.style.display = "none";
+  pauseBtn.textContent = "PAUSE";
   
+  // [수정] 0.7초 (700ms) 간격
   loopInterval = setInterval(() => {
     if (!isProcessing) {
       captureAndAnalyze();
     }
-  }, 3000); 
+  }, 700); 
 }
 
-actionBtn.addEventListener("click", () => {
+// Pause/Resume
+pauseBtn.addEventListener("click", () => {
   if (isRunning) {
     clearInterval(loopInterval);
     isRunning = false;
-    actionBtn.textContent = "RESUME";
+    pauseBtn.textContent = "RESUME";
     statusBar.textContent = "Paused";
-    manualExitBtn.style.display = "block";
   } else {
     startARLoop();
   }
 });
 
-manualExitBtn.addEventListener("click", () => {
+// View Gallery (Open)
+galleryBtn.addEventListener("click", () => {
+  // 루프 정지
+  if (isRunning) {
+    clearInterval(loopInterval);
+    isRunning = false;
+    pauseBtn.textContent = "RESUME";
+  }
+  
+  // 갤러리 DOM 구성
+  galleryContainer.innerHTML = "";
+  if (capturedImagesData.length === 0) {
+    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px;">NO PHOTOS CAPTURED</div>';
+  } else {
+    // 갤러리 아이템 생성
+    capturedImagesData.forEach(data => {
+      const item = document.createElement('div');
+      item.className = 'gallery-item';
+      item.innerHTML = `
+        <img src="${data.src}">
+        <div class="polaroid-text">${data.label}</div>
+        <div class="polaroid-watermark">
+          2026 ADD+ 도리를 찾아서<br>
+          Emotional Sphere
+        </div>
+      `;
+      galleryContainer.appendChild(item);
+    });
+    // 스크롤을 마지막 사진(최신)으로 이동하거나 처음으로 이동
+    // 여기서는 중앙 정렬을 위해 살짝 트릭 사용 (flex padding)
+  }
+
+  galleryScreen.classList.add("active");
+});
+
+// Resume from Gallery
+resumeBtn.addEventListener("click", () => {
+  galleryScreen.classList.remove("active");
+  startARLoop();
+});
+
+// Reset from Gallery
+resetBtn.addEventListener("click", () => {
   resetSystem();
 });
 
-// [핵심] 폴라로이드 생성 로직
+
+// [Snapshot Logic]
 function triggerSnapshot(label) {
   if(snapshotCooldown) return;
   snapshotCooldown = true;
@@ -318,10 +431,16 @@ function triggerSnapshot(label) {
   ctx.restore();
   ctx.drawImage(renderer.domElement, 0, 0, 640, 480);
 
+  const imgData = captureCanvas.toDataURL("image/jpeg");
+  
+  // 갤러리 데이터 저장
+  capturedImagesData.push({ src: imgData, label: label });
+
+  // 메인 화면용 폴라로이드 생성
   const polaroid = document.createElement('div');
   polaroid.className = 'polaroid';
   polaroid.innerHTML = `
-    <img src="${captureCanvas.toDataURL("image/jpeg")}">
+    <img src="${imgData}">
     <div class="polaroid-text">${label}</div>
     <div class="polaroid-watermark">
       2026 ADD+ 도리를 찾아서<br>
@@ -335,32 +454,29 @@ function triggerSnapshot(label) {
   flashOverlay.style.opacity = 1;
   setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
   
-  // Dimming & Center Show
+  // Center Show
   dimOverlay.classList.add('active');
   polaroid.style.opacity = 1; 
 
-  // [수정] 중앙 노출 시간: 1초
+  // [수정] 중앙 노출 1초 후 이동
   setTimeout(() => {
     dimOverlay.classList.remove('active');
 
-    // [수정] 오른쪽 하단 구석으로 이동
-    // 겹쳐서 쌓이도록 계산 (오른쪽 20px에서 시작해서 왼쪽으로 100px씩 이동)
     const offsetX = (photoCount - 1) * 100; 
     const targetRight = 20 + offsetX;
-    const targetBottom = 30; // 하단 여백 30px (구석)
+    const targetBottom = 30; 
 
     polaroid.style.top = 'auto';
     polaroid.style.left = 'auto';
     polaroid.style.right = targetRight + 'px';
     polaroid.style.bottom = targetBottom + 'px';
     
-    // 크기 줄이고 회전
     polaroid.style.transform = `scale(0.35) rotate(${Math.random() * 10 - 5}deg)`; 
     polaroid.classList.add('animate-to-corner');
     
     setTimeout(() => { snapshotCooldown = false; }, 2000);
 
-  }, 1000); // 1초 대기
+  }, 1000); 
 }
 
 async function captureAndAnalyze() {
@@ -395,21 +511,26 @@ async function captureAndAnalyze() {
       if (validFaces.length > 0) {
         lastFaceDetectedTime = now;
         warningMsg.style.display = "none";
-        statusBar.textContent = ""; // 텍스트 제거
+        statusBar.textContent = ""; 
         updateSpheresState(validFaces);
 
-        let maxEmotionVal = 0;
-        let maxEmotionLabel = "";
+        // [감정 피크 체크 & 라벨링]
+        // [수정] 복합 감정 (A & B) 처리
+        let strongEmotions = new Set();
         
         validFaces.forEach(f => {
-          if (f.emotions.joy > maxEmotionVal) { maxEmotionVal = f.emotions.joy; maxEmotionLabel = "Pure Joy"; }
-          if (f.emotions.surprise > maxEmotionVal) { maxEmotionVal = f.emotions.surprise; maxEmotionLabel = "Pure Surprise"; }
-          if (f.emotions.anger > maxEmotionVal) { maxEmotionVal = f.emotions.anger; maxEmotionLabel = "Pure Anger"; }
-          if (f.emotions.sorrow > maxEmotionVal) { maxEmotionVal = f.emotions.sorrow; maxEmotionLabel = "Deep Sorrow"; }
+          if (f.emotions.joy > 0.9) strongEmotions.add("Pure Joy");
+          if (f.emotions.surprise > 0.9) strongEmotions.add("Pure Surprise");
+          if (f.emotions.anger > 0.9) strongEmotions.add("Pure Anger");
+          if (f.emotions.sorrow > 0.9) strongEmotions.add("Deep Sorrow");
         });
 
-        if (maxEmotionVal > 0.9 && !snapshotCooldown) {
-          triggerSnapshot(maxEmotionLabel);
+        // 감정이 하나라도 0.9 넘으면 찰칵
+        if (strongEmotions.size > 0 && !snapshotCooldown) {
+          // Set을 배열로, 그리고 문자열로 합침 ("Pure Joy & Pure Anger")
+          const labelText = Array.from(strongEmotions).join(" & ");
+          
+          triggerSnapshot(labelText);
           statusBar.textContent = "Moment Captured";
           setTimeout(() => { statusBar.textContent = ""; }, 2000);
         }
@@ -427,7 +548,7 @@ async function captureAndAnalyze() {
 }
 
 
-/* ================= [2] Three.js Logic (Fast & Responsive) ================= */
+/* ================= [2] Three.js Logic ================= */
 let scene, camera, renderer;
 let time = 0;
 const MAX_SPHERES = 6; 
@@ -494,7 +615,7 @@ class Sphere {
         this.mesh.material.opacity = this.currentOpacity;
         if (this.currentOpacity < 0.01) return;
 
-        // [최적화] 반응 속도 빠르게 (0.08)
+        // [수정] 반응 속도 빠르게 (0.08)
         this.currentPos.lerp(this.targetPos, 0.08); 
         this.group.position.copy(this.currentPos);
 
