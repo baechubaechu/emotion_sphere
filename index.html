@@ -3,82 +3,99 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Deep Digital Sphere - Spinning Edition</title>
+  <title>Deep Digital Sphere AR</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; }
     
-    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; }
-    
-    /* 비상 탈출 버튼 (우측 상단, 투명도 낮음) */
-    #emergency-btn {
-      position: fixed; top: 15px; right: 15px; width: 40px; height: 40px; z-index: 9999;
-      color: rgba(255, 255, 255, 0.2); font-size: 24px; display: flex; justify-content: center; align-items: center;
-      cursor: pointer; border-radius: 50%; transition: all 0.3s;
-    }
-    #emergency-btn:active { color: #fff; background: rgba(255,255,255,0.2); }
+    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-    /* 화면 전환 공통 */
-    .screen {
+    /* 배경: 카메라 */
+    #cam {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      transition: opacity 0.5s ease; z-index: 10; pointer-events: none;
+      object-fit: cover; transform: scaleX(-1); z-index: 1;
+      filter: brightness(0.7); /* 오라 강조를 위해 배경 어둡게 */
     }
-    .screen.active { opacity: 1; pointer-events: auto; }
-    .screen.hidden { opacity: 0; pointer-events: none; display: none; }
 
-    /* 버튼 스타일 */
+    /* 전경: Three.js */
+    #three-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 2; pointer-events: none;
+    }
+
+    /* UI 레이어 */
+    #ui-layer {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 10; pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+      padding: 20px;
+    }
+
+    /* 상단 상태바 */
+    #status-bar {
+      margin-top: 10px; padding: 8px 20px;
+      background: rgba(0, 0, 0, 0.5); border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff; font-size: 14px; letter-spacing: 1px;
+      backdrop-filter: blur(5px);
+    }
+
+    /* [NEW] 경고 메시지 (얼굴 없음) */
+    #warning-msg {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
+      color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
+      display: none; /* 평소엔 숨김 */
+      backdrop-filter: blur(10px);
+      text-align: center;
+    }
+
+    /* 하단 버튼 */
+    #controls { margin-bottom: 30px; pointer-events: auto; }
+    
     button.main-btn {
       padding: 16px 40px; border: 1px solid rgba(255, 255, 255, 0.4);
       background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 16px; letter-spacing: 2px;
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
     }
-    button.main-btn:active { transform: scale(0.95); }
+    button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.2); }
 
-    /* 1. 시작 화면 */
-    #start-screen { z-index: 30; background: #000; } 
-    #startBtn { border: none; background: transparent; font-size: 22px; letter-spacing: 4px; animation: pulse 2s infinite; color: #fff; cursor: pointer; }
+    /* 시작 화면 (가림막) */
+    #cover {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #000; z-index: 20;
+      display: flex; justify-content: center; align-items: center;
+      transition: opacity 0.8s;
+    }
+    #startBtn {
+      border: 1px solid #fff; background: transparent; color: #fff;
+      padding: 15px 40px; font-size: 18px; letter-spacing: 4px;
+      cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
+    }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-    /* 2. 카메라 화면 */
-    #camera-screen { justify-content: flex-end; padding-bottom: 60px; background: rgba(0,0,0,0.3); }
-    #camera-frame {
-      position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%);
-      width: 300px; height: 300px; border: 1px solid rgba(255,255,255,0.3); background: #000; overflow: hidden;
-    }
-    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.8; }
-    #face-guide {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 60%; height: 70%; border: 2px dashed rgba(255,255,255,0.5); border-radius: 50%;
-    }
-    
-    /* 3. 결과 화면 */
-    #retry-screen { justify-content: flex-end; padding-bottom: 60px; }
-    #info-text { position: absolute; top: 15%; width: 100%; text-align: center; color: rgba(255,255,255,0.7); }
-    
-    /* 캡쳐용 캔버스 (숨김) */
+    /* 데이터 처리용 캔버스 */
     #snap { display: none; }
   </style>
 </head>
 <body>
 
-<div id="emergency-btn">⟳</div>
-<div id="container"></div>
-
-<div id="start-screen" class="screen active">
+<div id="cover">
   <button id="startBtn">TOUCH TO START</button>
 </div>
 
-<div id="camera-screen" class="screen hidden">
-  <div id="camera-frame">
-    <video id="cam" autoplay playsinline muted></video>
-    <div id="face-guide"></div>
-  </div>
-  <button id="scanBtn" class="main-btn">SCAN AURA</button>
+<div id="container">
+  <video id="cam" autoplay playsinline muted></video>
+  <div id="three-canvas"></div>
 </div>
 
-<div id="retry-screen" class="screen hidden">
-  <div id="info-text">데이터를 공간화하고 있습니다...</div>
-  <button id="retryBtn" class="main-btn">↺ RE-SCAN</button>
+<div id="ui-layer">
+  <div id="status-bar">Ready</div>
+  <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
+  
+  <div id="controls">
+    <button id="actionBtn" class="main-btn" style="display:none;">PAUSE</button>
+  </div>
 </div>
 
 <canvas id="snap"></canvas>
@@ -86,14 +103,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <script>
-// [서버 주소]
 const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
 
-/* ================= [0] 유틸리티 (비상탈출, 노이즈) ================= */
-document.getElementById('emergency-btn').addEventListener('click', () => {
-  if(confirm("시스템을 재시작하시겠습니까?")) location.reload();
-});
-
+/* ================= [0] Noise Function ================= */
 const SimplexNoise = function() {
   this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
   this.p = []; for (var i=0; i<256; i++) this.p[i] = Math.floor(Math.random()*256);
@@ -122,49 +134,112 @@ SimplexNoise.prototype.noise = function(xin, yin) {
 const noise = new SimplexNoise();
 
 
-/* ================= [1] UI 및 카메라 로직 ================= */
-const startScreen = document.getElementById("start-screen");
-const cameraScreen = document.getElementById("camera-screen");
-const retryScreen = document.getElementById("retry-screen");
-const startBtn = document.getElementById("startBtn");
-const scanBtn = document.getElementById("scanBtn");
-const retryBtn = document.getElementById("retryBtn");
-const infoText = document.getElementById("info-text");
+/* ================= [1] Logic & Control ================= */
 const videoElement = document.getElementById("cam");
+const statusBar = document.getElementById("status-bar");
+const warningMsg = document.getElementById("warning-msg");
+const startBtn = document.getElementById("startBtn");
+const cover = document.getElementById("cover");
+const actionBtn = document.getElementById("actionBtn");
 
 let stream = null;
-let idleTimer = null;
-const IDLE_LIMIT = 60000;
+let isRunning = false;
+let isProcessing = false;
+let loopInterval = null;
 
+// [NEW] 타임아웃 관련 변수
+let lastFaceDetectedTime = 0; // 마지막으로 얼굴 본 시간
+const RESET_TIMEOUT = 10000;  // 10초 (10000ms)
+
+// 1. 시작 버튼
 startBtn.addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     videoElement.srcObject = stream;
     videoElement.play();
-  } catch (e) { alert("카메라 권한이 필요합니다."); return; }
-
-  showScreen(cameraScreen);
-  resetIdleTimer();
+    
+    // UI 전환
+    cover.style.opacity = 0;
+    setTimeout(() => { cover.style.display = "none"; }, 800);
+    actionBtn.style.display = "block";
+    
+    // AR 시작
+    startARLoop();
+    
+  } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
-scanBtn.addEventListener("click", async () => {
-  resetIdleTimer();
-  showScreen(null);
-  retryScreen.classList.remove("hidden"); retryScreen.classList.add("active");
-  retryBtn.style.display = "none";
-  infoText.textContent = "표정을 공간 좌표로 변환 중...";
+// 2. 시스템 리셋 (초기화면으로)
+function resetSystem() {
+  console.log("System Reset due to inactivity");
   
-  spheres.forEach(s => s.setAnalyzing(true));
+  // 루프 정지
+  clearInterval(loopInterval);
+  isRunning = false;
+  isProcessing = false;
+
+  // 카메라 정지 (스트림 해제)
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  videoElement.srcObject = null;
+
+  // UI 초기화
+  cover.style.display = "flex";
+  // 약간의 딜레이 후 페이드인
+  setTimeout(() => { cover.style.opacity = 1; }, 10);
+  
+  actionBtn.style.display = "none";
+  warningMsg.style.display = "none";
+  statusBar.textContent = "Ready";
+  
+  // 구체 숨기기
+  updateSpheresState([]);
+}
+
+// 3. AR 루프 시작
+function startARLoop() {
+  if (isRunning) return;
+  isRunning = true;
+  lastFaceDetectedTime = Date.now(); // 시작할 때 시간 갱신
+  actionBtn.textContent = "PAUSE";
+  
+  // 1초(1000ms) 간격으로 요청
+  loopInterval = setInterval(() => {
+    if (!isProcessing) {
+      captureAndAnalyze();
+    }
+  }, 1000); 
+}
+
+// 4. 멈춤/재시작 버튼
+actionBtn.addEventListener("click", () => {
+  if (isRunning) {
+    clearInterval(loopInterval);
+    isRunning = false;
+    actionBtn.textContent = "RESUME";
+    statusBar.textContent = "Paused";
+  } else {
+    startARLoop();
+  }
+});
+
+// 5. 캡쳐 및 분석
+async function captureAndAnalyze() {
+  isProcessing = true;
 
   const canvas = document.getElementById("snap");
   const ctx = canvas.getContext("2d");
   canvas.width = 640;
   canvas.height = 480;
-  ctx.save(); ctx.scale(-1, 1);
+  
+  ctx.save();
+  ctx.scale(-1, 1);
   ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
   ctx.restore();
 
-  const basicMeta = { device: navigator.userAgent, timestamp: new Date().toString() };
+  const basicMeta = { device: navigator.userAgent };
 
   canvas.toBlob(async blob => {
     const form = new FormData();
@@ -176,43 +251,37 @@ scanBtn.addEventListener("click", async () => {
       if(!res.ok) throw new Error("Error");
       const data = await res.json();
       
+      const now = Date.now();
+
       if (data.status === "ok" && data.face_count > 0) {
-        infoText.textContent = "";
+        // 얼굴 찾음!
+        lastFaceDetectedTime = now; // 시간 갱신
+        warningMsg.style.display = "none"; // 경고 숨김
+        statusBar.textContent = `${data.face_count} Aura(s) Active`;
         updateSpheresState(data.faces_list);
       } else {
-        infoText.textContent = "얼굴을 찾을 수 없습니다.";
-        updateSpheresState([]); 
+        // 얼굴 없음
+        statusBar.textContent = "Searching...";
+        updateSpheresState([]); // 구체 숨김
+        
+        // 경고 메시지 표시
+        warningMsg.style.display = "block";
+        
+        // 10초 지났는지 확인
+        if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
+          resetSystem();
+        }
       }
-    } catch (e) { 
-      console.error(e); 
-      infoText.textContent = "서버 연결 실패"; 
-      updateSpheresState([]);
-    } 
-    finally {
-      spheres.forEach(s => s.setAnalyzing(false));
-      setTimeout(() => { retryBtn.style.display = "block"; }, 2000);
+    } catch (e) {
+      console.log("Skip frame");
+    } finally {
+      isProcessing = false;
     }
-  }, "image/jpeg", 0.9);
-});
-
-retryBtn.addEventListener("click", () => {
-  resetIdleTimer();
-  showScreen(cameraScreen);
-  spheres.forEach(s => s.setBackground());
-  videoElement.play();
-});
-
-function resetIdleTimer() {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => { location.reload(); }, IDLE_LIMIT);
-}
-function showScreen(target) {
-  [startScreen, cameraScreen, retryScreen].forEach(s => { s.classList.remove("active"); s.classList.add("hidden"); });
-  if (target) { target.classList.remove("hidden"); target.classList.add("active"); }
+  }, "image/jpeg", 0.8);
 }
 
 
-/* ================= [2] Three.js: Multi-Sphere System (Spinning Edition) ================= */
+/* ================= [2] Three.js Logic ================= */
 let scene, camera, renderer;
 let time = 0;
 const MAX_SPHERES = 6; 
@@ -221,16 +290,18 @@ const IMG_W = 640; const IMG_H = 480;
 
 class Sphere {
     constructor(scene) {
-        this.particleCount = 4000;
-        this.radius = 70; 
+        this.particleCount = 3500; 
+        this.radius = 60; 
         this.particlesData = [];
         this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
         this.pose = { pan: 0, tilt: 0, boxSize: 0.5 };
+        
+        this.targetPos = new THREE.Vector3(0, 0, 0);
+        this.currentPos = new THREE.Vector3(0, 0, 0);
+        
         this.isActive = false;
         this.targetOpacity = 0.0;
         this.currentOpacity = 0.0;
-        
-        // [NEW] 회전 속도를 저장할 변수
         this.rotationSpeed = { x: 0, y: 0.002, z: 0 }; 
 
         this._initMesh(scene);
@@ -260,81 +331,63 @@ class Sphere {
         });
         
         this.mesh = new THREE.Points(geo, mat);
-
-        // [NEW] 2중 구조: Group(고개기울기 담당) -> Mesh(자전 담당)
         this.group = new THREE.Group();
         this.group.add(this.mesh);
-        scene.add(this.group); // group을 씬에 추가
+        scene.add(this.group);
     }
 
-    updateData(faceData) {
+    updateData(faceData, targetX, targetY) {
         this.emotions = faceData.emotions;
         this.pose = faceData.pose;
         this.isActive = true;
         this.targetOpacity = 1.0;
+        this.targetPos.set(targetX, targetY, 0);
     }
 
     hide() {
         this.isActive = false;
         this.targetOpacity = 0.0;
-        this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
     }
 
-    setAnalyzing(isAnalyzing) { if(this.isActive && isAnalyzing) this.targetOpacity = 0.4; }
-    setBackground() { if(this.isActive) this.targetOpacity = 0.2; }
-
     animate(time) {
-        this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.05;
+        this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.1;
         this.mesh.material.opacity = this.currentOpacity;
 
         if (this.currentOpacity < 0.01) return;
+
+        this.currentPos.lerp(this.targetPos, 0.05); 
+        this.group.position.copy(this.currentPos);
 
         const positions = this.mesh.geometry.attributes.position.array;
         const colors = this.mesh.geometry.attributes.color.array;
         const { joy, sorrow, anger, surprise } = this.emotions;
         const { pan, tilt, boxSize } = this.pose;
 
-        // --- [NEW] 1. 고개 기울기 반영 (Group 회전) ---
-        // Lerp로 부드럽게 기울임
-        this.group.rotation.y += (pan * 0.8 - this.group.rotation.y) * 0.05;
-        this.group.rotation.x += (-tilt * 0.8 - this.group.rotation.x) * 0.05;
+        this.group.rotation.y += (pan * 2.5 - this.group.rotation.y) * 0.05;
+        this.group.rotation.x += (-tilt * 2.5 - this.group.rotation.x) * 0.05;
+        const squashX = 1.0 - Math.abs(pan) * 0.3; 
+        this.group.scale.x += (squashX - this.group.scale.x) * 0.05;
 
-        // --- [NEW] 2. 감정 기반 지속 회전 (Mesh 자전) ---
-        let targetSX = 0, targetSY = 0.002, targetSZ = 0; // 기본 느린 자전
+        let targetSX = 0, targetSY = 0.002, targetSZ = 0; 
         const baseSpeed = 0.02;
-
         if (this.isActive) {
-            if (joy > 0.1) {
-                // 기쁨: Y축 중심 빠른 회전 (팽이처럼)
-                targetSY = baseSpeed * (1 + joy * 3);
-            } else if (anger > 0.1) {
-                // 분노: X, Z축 중심 거친 텀블링
-                targetSX = baseSpeed * (1 + anger * 4);
-                targetSZ = baseSpeed * (0.5 + anger * 2);
-            } else if (sorrow > 0.1) {
-                // 슬픔: 매우 느려짐
-                targetSY = baseSpeed * 0.05;
-            } else if (surprise > 0.1) {
-                // 놀람: 적당히 빠름
-                targetSY = baseSpeed * (1 + surprise);
-            }
+            if (joy > 0.1) { targetSY = baseSpeed * (1 + joy * 3); } 
+            else if (anger > 0.1) { targetSX = baseSpeed * (1 + anger * 4); targetSZ = baseSpeed * (0.5 + anger * 2); } 
+            else if (sorrow > 0.1) { targetSY = baseSpeed * 0.05; } 
+            else if (surprise > 0.1) { targetSY = baseSpeed * (1 + surprise); }
         }
-
-        // 회전 속도 부드럽게 전환 (Lerp)
         this.rotationSpeed.x += (targetSX - this.rotationSpeed.x) * 0.05;
         this.rotationSpeed.y += (targetSY - this.rotationSpeed.y) * 0.05;
         this.rotationSpeed.z += (targetSZ - this.rotationSpeed.z) * 0.05;
-
-        // Mesh에 회전 적용 (지속적으로 더해줌)
         this.mesh.rotation.x += this.rotationSpeed.x;
         this.mesh.rotation.y += this.rotationSpeed.y;
         this.mesh.rotation.z += this.rotationSpeed.z;
         
-        // 3. 얼굴 크기 반영 (Scale) - Group 전체 크기 조절
         const targetScale = 0.8 + (boxSize * 0.5);
-        this.group.scale.setScalar(this.group.scale.x + (targetScale - this.group.scale.x) * 0.05);
+        const currentScale = this.group.scale.y; 
+        const nextScale = currentScale + (targetScale - currentScale) * 0.05;
+        this.group.scale.set(nextScale * squashX, nextScale, nextScale);
 
-        // 4. 파티클 내부 애니메이션 (노이즈 & 색상)
         let tr=0.5, tg=0.5, tb=0.8; 
         let noiseIntensity = 0.5; let breathingSpeed = 1.0; let pulse = 0.0;          
 
@@ -373,8 +426,9 @@ class Sphere {
 }
 
 function initThree() {
-    const container = document.getElementById("container");
-    scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
+    const container = document.getElementById("three-canvas");
+    scene = new THREE.Scene(); 
+    scene.background = null; 
     
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
     camera.position.z = 600; 
@@ -395,10 +449,8 @@ function initThree() {
     });
 }
 
-// [핵심] 얼굴 좌표 매핑 (Group 위치 이동)
 function updateSpheresState(facesList) {
     const count = Math.min(facesList.length, MAX_SPHERES);
-    
     const dist = camera.position.z;
     const vFOV = THREE.Math.degToRad(camera.fov); 
     const visibleHeight = 2 * Math.tan(vFOV / 2) * dist;
@@ -406,22 +458,17 @@ function updateSpheresState(facesList) {
 
     for (let i = 0; i < count; i++) {
         const faceData = facesList[i];
-        spheres[i].updateData(faceData);
-        
         const rect = faceData.rect;
         const centerX = (rect.min_x + rect.max_x) / 2;
         const centerY = (rect.min_y + rect.max_y) / 2;
 
-        const normX = -((centerX / IMG_W) - 0.5);
-        const normY = -((centerY / IMG_H) - 0.5);
+        const normX = ((centerX / IMG_W) - 0.5); 
+        const normY = -((centerY / IMG_H) - 0.5); 
 
         const targetX = normX * visibleWidth;
         const targetY = normY * visibleHeight;
 
-        // [NEW] Mesh 대신 Group의 위치를 이동시킴
-        spheres[i].group.position.x = targetX;
-        spheres[i].group.position.y = targetY;
-        spheres[i].group.position.z = 0;
+        spheres[i].updateData(faceData, targetX, targetY);
     }
 
     for (let i = count; i < MAX_SPHERES; i++) {
