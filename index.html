@@ -14,13 +14,26 @@
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-    /* Dim Overlay */
+    /* Dim Overlay (Flash & Intro) */
     #dim-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.8);
       z-index: 80; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
     }
     #dim-overlay.active { opacity: 1; }
+
+    /* [NEW] Intro Overlay (Blackout) */
+    #intro-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #000; z-index: 150; /* Start Screen보다 위 */
+      display: flex; justify-content: center; align-items: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
+    }
+    #intro-overlay.active { opacity: 1; pointer-events: auto; }
+    #intro-text {
+      color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
+      text-align: center; line-height: 1.6;
+    }
 
     /* Camera */
     #cam {
@@ -40,27 +53,28 @@
       z-index: 90; pointer-events: none;
       display: flex; flex-direction: column; justify-content: space-between; align-items: center;
       padding: 30px; box-sizing: border-box;
+      opacity: 0; transition: opacity 0.5s; /* 인트로 때는 숨김 */
     }
+    #ui-layer.visible { opacity: 1; }
 
     #brand-title {
       font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
       margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
     }
 
-    /* Instruction Text Animation */
-    #instruction-text {
-      color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 300;
-      margin-top: 15px; letter-spacing: 1px;
-      text-shadow: 0 0 10px rgba(0,0,0,0.5);
-      animation: floatText 3s ease-in-out infinite;
+    /* Timer Display */
+    #timer-display {
+      font-size: 48px; font-weight: 700; color: #fff;
+      margin-top: 10px; letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
     }
-    @keyframes floatText {
-      0%, 100% { transform: translateY(0); opacity: 0.8; }
-      50% { transform: translateY(-5px); opacity: 1; }
+    #timer-label {
+      font-size: 12px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 2px; margin-top: -5px;
     }
 
     #status-bar {
-      margin-top: 5px; font-size: 14px; color: #aaa; 
+      margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
       transition: opacity 0.5s; min-height: 20px;
     }
 
@@ -91,7 +105,7 @@
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* Polaroid Styling */
+    /* Polaroid */
     .polaroid {
       position: fixed; top: 50%; left: 50%; width: 280px; 
       background: #fff; padding: 15px 15px 50px 15px;
@@ -103,13 +117,10 @@
       transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
       transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
     }
-    
-    /* [수정 1] 폴라로이드 사진 투명도 추가 */
     .polaroid img { 
         width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; 
-        opacity: 0.85; /* 약간 투명하게 */
+        opacity: 0.85; 
     }
-    
     .polaroid-text {
       font-family: 'Caveat', cursive; font-size: 28px; color: #222;
       text-align: center; margin-top: 15px; line-height: 1.1;
@@ -147,8 +158,6 @@
       transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
     }
     .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
-    
-    /* [수정] 갤러리 이미지도 투명도 적용 및 필터 조정 */
     .gallery-item img { 
         width: 100%; display: block; border: 1px solid #eee; 
         opacity: 0.9;
@@ -162,6 +171,7 @@
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
     }
 
+    /* Start Screen */
     #start-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #000; z-index: 100;
@@ -174,6 +184,7 @@
       cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
     }
     @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+    
     #warning-msg {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
@@ -188,6 +199,12 @@
 <div id="flash-overlay"></div>
 <div id="dim-overlay"></div>
 
+<div id="intro-overlay">
+  <div id="intro-text">
+    1분간 최대한 많은<br>감정을 찾아보세요!
+  </div>
+</div>
+
 <div id="start-screen">
   <div style="font-size: 12px; color: #888; margin-bottom: 20px;">EMOTIONAL SPHERE PROJECT</div>
   <button id="startBtn">TOUCH TO START</button>
@@ -201,26 +218,33 @@
 <div id="ui-layer">
   <div style="display:flex; flex-direction:column; align-items:center;">
     <div id="brand-title">EMOTIONAL SPHERE</div>
-    <div id="instruction-text">다양한 표정을 지어보세요</div>
+    
+    <div id="timer-display">60</div>
+    <div id="timer-label">SECONDS LEFT</div>
+    
     <div id="status-bar"></div>
   </div>
   
   <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
   
   <div id="controls">
-    <button id="pauseBtn" class="main-btn" style="display:none;">PAUSE</button>
-    <button id="galleryBtn" class="main-btn" style="display:none;">VIEW GALLERY</button>
+    <button id="galleryBtn" class="main-btn" style="display:none;">FINISH & VIEW</button>
   </div>
 </div>
 
 <div id="gallery-screen">
-  <div id="brand-title" style="margin-bottom:20px;">CAPTURED MOMENTS</div>
+  <div style="display:flex; flex-direction:column; align-items:center;">
+    <div id="brand-title" style="margin-bottom:10px;">YOUR EMOTIONAL JOURNEY</div>
+    <div style="color:rgba(255,255,255,0.7); font-size:14px; letter-spacing:1px;">
+      SESSION CLOSING IN <span id="gallery-timer" style="color:#fff; font-weight:bold;">30</span>s
+    </div>
+  </div>
+
   <div id="gallery-viewport">
       <div id="gallery-container"></div>
   </div>
   <div id="gallery-controls">
-    <button id="resumeBtn" class="main-btn">RESUME</button>
-    <button id="resetBtn" class="reset-btn">RESET</button>
+    <button id="resetBtn" class="reset-btn">FINISH (GO TO START)</button>
   </div>
 </div>
 
@@ -266,14 +290,18 @@ const statusBar = document.getElementById("status-bar");
 const warningMsg = document.getElementById("warning-msg");
 const startBtn = document.getElementById("startBtn");
 const startScreen = document.getElementById("start-screen");
+const uiLayer = document.getElementById("ui-layer");
+const introOverlay = document.getElementById("intro-overlay");
 
-const pauseBtn = document.getElementById("pauseBtn");
-const galleryBtn = document.getElementById("galleryBtn");
+// Timers
+const timerDisplay = document.getElementById("timer-display");
+const galleryTimerDisplay = document.getElementById("gallery-timer");
+
+const galleryBtn = document.getElementById("galleryBtn"); // Finish Early
 
 const galleryScreen = document.getElementById("gallery-screen");
 const galleryViewport = document.getElementById("gallery-viewport");
 const galleryContainer = document.getElementById("gallery-container");
-const resumeBtn = document.getElementById("resumeBtn");
 const resetBtn = document.getElementById("resetBtn");
 
 const flashOverlay = document.getElementById("flash-overlay");
@@ -283,7 +311,6 @@ let stream = null;
 let isRunning = false;
 let isProcessing = false;
 let loopInterval = null;
-let lastFaceDetectedTime = 0; 
 let snapshotCooldown = false;
 let photoCount = 0; 
 let createdPolaroids = []; 
@@ -292,53 +319,90 @@ let capturedImagesData = [];
 let capturedEmotionsSet = new Set();
 let hasTakenFirstShot = false;
 
+// Gallery Vars
 let currentGalleryIndex = 0;
 let touchStartX = 0;
 let touchEndX = 0;
 
+// Timers
+let sessionTimeLeft = 60;
+let sessionTimerInterval = null;
+let galleryTimeLeft = 30;
+let galleryTimerInterval = null;
+
 const MIN_FACE_SIZE = 0.15;  
 
-let inactivityTimer = null;
-const INACTIVITY_LIMIT = 60000; 
-
-function resetInactivityTimer() {
-    if (!isRunning && galleryScreen.style.display === 'none') return; 
-    clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-        console.log("Inactivity Timeout. Resetting.");
-        resetSystem();
-    }, INACTIVITY_LIMIT);
-}
-
-document.addEventListener('touchstart', resetInactivityTimer, {passive: true});
-document.addEventListener('mousedown', resetInactivityTimer, {passive: true});
-document.addEventListener('keydown', resetInactivityTimer, {passive: true});
-
-
-// Start
+// Start Button Click
 startBtn.addEventListener("click", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
     videoElement.srcObject = stream;
     videoElement.play();
     
+    // 1. Hide Start Screen
     startScreen.style.opacity = 0;
-    setTimeout(() => { startScreen.style.display = "none"; }, 800);
+    setTimeout(() => { startScreen.style.display = "none"; }, 500);
     
-    pauseBtn.style.display = "block";
-    galleryBtn.style.display = "block";
-    statusBar.textContent = "Ready";
-    
-    resetInactivityTimer(); 
-    startARLoop();
+    // 2. Show Intro (Blackout with Text)
+    introOverlay.classList.add('active');
+
+    // 3. Wait 2 seconds, then Start Session
+    setTimeout(() => {
+        introOverlay.classList.remove('active');
+        uiLayer.classList.add('visible'); // Show UI
+        
+        galleryBtn.style.display = "block";
+        statusBar.textContent = "Ready";
+        
+        startSession();
+    }, 2000);
+
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
 
-// Full Reset
+// Start Session (1 Minute)
+function startSession() {
+    if (isRunning) return;
+    isRunning = true;
+    
+    // Init Timer
+    sessionTimeLeft = 60;
+    timerDisplay.textContent = sessionTimeLeft;
+    timerDisplay.style.color = "#fff";
+    
+    // Start AR Loop
+    loopInterval = setInterval(() => {
+        if (!isProcessing) captureAndAnalyze();
+    }, 700);
+
+    // Start Session Countdown
+    sessionTimerInterval = setInterval(() => {
+        sessionTimeLeft--;
+        timerDisplay.textContent = sessionTimeLeft;
+        
+        if (sessionTimeLeft <= 10) timerDisplay.style.color = "#ff5555";
+
+        if (sessionTimeLeft <= 0) {
+            finishSession();
+        }
+    }, 1000);
+}
+
+// Finish Session -> Go to Gallery
+function finishSession() {
+    clearInterval(loopInterval);
+    clearInterval(sessionTimerInterval);
+    isRunning = false;
+    
+    openGallery();
+}
+
+// Full Reset (Go to Start)
 function resetSystem() {
-  console.log("Session Reset");
+  console.log("System Reset");
   clearInterval(loopInterval);
-  clearTimeout(inactivityTimer); 
+  clearInterval(sessionTimerInterval);
+  clearInterval(galleryTimerInterval);
   isRunning = false;
   isProcessing = false;
 
@@ -350,9 +414,10 @@ function resetSystem() {
 
   startScreen.style.display = "flex";
   galleryScreen.classList.remove("active");
+  uiLayer.classList.remove("visible"); // Hide Main UI
+  
   setTimeout(() => { startScreen.style.opacity = 1; }, 10);
   
-  pauseBtn.style.display = "none";
   galleryBtn.style.display = "none";
   warningMsg.style.display = "none";
   statusBar.textContent = "";
@@ -370,38 +435,13 @@ function resetSystem() {
   galleryContainer.style.transform = 'translateX(0)';
 }
 
-function startARLoop() {
-  if (isRunning) return;
-  isRunning = true;
-  pauseBtn.textContent = "PAUSE";
-  
-  loopInterval = setInterval(() => {
-    if (!isProcessing) {
-      captureAndAnalyze();
-    }
-  }, 700); 
-}
-
-// Pause/Resume
-pauseBtn.addEventListener("click", () => {
-  if (isRunning) {
-    clearInterval(loopInterval);
-    isRunning = false;
-    pauseBtn.textContent = "RESUME";
-    statusBar.textContent = "Paused";
-  } else {
-    startARLoop();
-  }
+// Manual Finish
+galleryBtn.addEventListener("click", () => {
+    finishSession();
 });
 
-// View Gallery
-galleryBtn.addEventListener("click", () => {
-  if (isRunning) {
-    clearInterval(loopInterval);
-    isRunning = false;
-    pauseBtn.textContent = "RESUME";
-  }
-  
+// Open Gallery
+function openGallery() {
   galleryContainer.innerHTML = "";
   if (capturedImagesData.length === 0) {
     galleryContainer.innerHTML = '<div style="color:#888; font-size:14px; margin-left: -50%;">NO PHOTOS CAPTURED</div>';
@@ -429,7 +469,35 @@ galleryBtn.addEventListener("click", () => {
   }
 
   galleryScreen.classList.add("active");
-});
+  startGalleryTimer();
+}
+
+// Gallery Countdown (30s)
+function startGalleryTimer() {
+    galleryTimeLeft = 30;
+    galleryTimerDisplay.textContent = galleryTimeLeft;
+    
+    clearInterval(galleryTimerInterval);
+    galleryTimerInterval = setInterval(() => {
+        galleryTimeLeft--;
+        galleryTimerDisplay.textContent = galleryTimeLeft;
+        
+        if (galleryTimeLeft <= 0) {
+            resetSystem();
+        }
+    }, 1000);
+}
+
+// Gallery Interaction Reset Timer? -> No, hard limit 30s as requested.
+// If you want interaction to extend time, uncomment below:
+/*
+function extendGalleryTime() {
+    galleryTimeLeft = 30;
+    galleryTimerDisplay.textContent = galleryTimeLeft;
+}
+galleryScreen.addEventListener('click', extendGalleryTime);
+galleryScreen.addEventListener('touchstart', extendGalleryTime);
+*/
 
 function updateGalleryPosition() {
     const items = document.querySelectorAll('.gallery-item');
@@ -469,18 +537,12 @@ function handleSwipe() {
     }
 }
 
-resumeBtn.addEventListener("click", () => {
-  galleryScreen.classList.remove("active");
-  startARLoop();
-});
-
 resetBtn.addEventListener("click", () => {
   resetSystem();
 });
 
 
-/* index.html의 <script> 내부 triggerSnapshot 함수 전체 교체 */
-
+// [Snapshot Logic]
 function triggerSnapshot(label) {
   if(snapshotCooldown) return;
   snapshotCooldown = true;
@@ -488,70 +550,47 @@ function triggerSnapshot(label) {
 
   capturedEmotionsSet.add(label);
 
-  // [수정 1] 캔버스 크기를 현재 화면(Renderer) 크기와 동일하게 설정
-  // 이렇게 하면 찌그러짐 없이 보이는 그대로 찍힙니다.
   const w = renderer.domElement.width;
   const h = renderer.domElement.height;
-
+  
   const captureCanvas = document.createElement("canvas");
   captureCanvas.width = w;
   captureCanvas.height = h;
   const ctx = captureCanvas.getContext("2d");
   
-  // [수정 2] 비디오를 화면 비율에 맞춰서 '꽉 차게(Cover)' 그리기 로직
+  // Video Cover Logic
   const vw = videoElement.videoWidth;
   const vh = videoElement.videoHeight;
-  
-  // 화면 비율과 영상 비율 비교
   const screenAspect = w / h;
   const videoAspect = vw / vh;
-  
   let drawW, drawH, startX, startY;
 
   if (screenAspect > videoAspect) {
-    // 화면이 더 납작함 -> 가로를 맞춤, 위아래 크롭
-    drawW = w;
-    drawH = w / videoAspect;
-    startX = 0;
-    startY = (h - drawH) / 2;
+    drawW = w; drawH = w / videoAspect;
+    startX = 0; startY = (h - drawH) / 2;
   } else {
-    // 화면이 더 길쭉함 -> 세로를 맞춤, 좌우 크롭
-    drawW = h * videoAspect;
-    drawH = h;
-    startX = (w - drawW) / 2;
-    startY = 0;
+    drawW = h * videoAspect; drawH = h;
+    startX = (w - drawW) / 2; startY = 0;
   }
 
-  // 1. 비디오 그리기 (거울 모드 적용)
   ctx.save();
-  ctx.translate(w, 0); 
-  ctx.scale(-1, 1); 
-  // translate로 뒤집었으므로 좌표 계산이 반대지만, 
-  // 중앙 중심 확대라 drawImage에 계산된 값을 넣으면 됨 (X좌표 보정 필요)
-  // 간단하게: 뒤집은 상태에서 이미지를 그릴 때 X좌표의 부호를 반대로 하거나 위치 조정
-  // 가장 쉬운 방법: drawImage의 dstX를 조정
-  // (뒤집힌 좌표계에서는 0,0이 우상단. x값이 증가하면 왼쪽으로 그려짐)
-  // 복잡하니 그냥 scale(-1, 1) 하고 x좌표를 -drawW - startX 이런식이 아니라
-  // 그냥 뒤집고 원점 기준 대칭 이동이 낫습니다.
-  // -> 더 쉬운 방법: 그냥 그립니다. (비디오 원본을 뒤집어서 그리기)
+  ctx.translate(w, 0); ctx.scale(-1, 1); 
   ctx.drawImage(videoElement, startX, startY, drawW, drawH);
   ctx.restore();
 
-  // 2. 배경 어둡게 (Vignette 느낌)
+  // Dark Overlay
   ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
   ctx.fillRect(0, 0, w, h);
 
-  // 3. 구체 그리기 (Screen 블렌딩 - 빛나는 효과)
+  // Sphere Overlay (Screen Blend)
   ctx.save();
   ctx.globalCompositeOperation = 'screen'; 
-  // Three.js 캔버스는 이미 화면 크기와 같으므로 0,0에 그대로 그림
   ctx.drawImage(renderer.domElement, 0, 0, w, h);
   ctx.restore();
 
   const imgData = captureCanvas.toDataURL("image/jpeg");
   capturedImagesData.push({ src: imgData, label: label });
 
-  // DOM 요소 생성 (폴라로이드)
   const polaroid = document.createElement('div');
   polaroid.className = 'polaroid';
   polaroid.innerHTML = `
@@ -565,15 +604,12 @@ function triggerSnapshot(label) {
   document.body.appendChild(polaroid);
   createdPolaroids.push(polaroid);
 
-  // 플래시 효과
   flashOverlay.style.opacity = 1;
   setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
   
-  // Dimming & Center Show
   dimOverlay.classList.add('active');
   polaroid.style.opacity = 1; 
 
-  // 1초 후 구석으로 이동
   setTimeout(() => {
     dimOverlay.classList.remove('active');
 
@@ -616,7 +652,6 @@ async function captureAndAnalyze() {
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Error");
       const data = await res.json();
-      const now = Date.now();
 
       let validFaces = [];
       if (data.status === "ok" && data.faces_list) {
@@ -624,7 +659,6 @@ async function captureAndAnalyze() {
       }
 
       if (validFaces.length > 0) {
-        lastFaceDetectedTime = now;
         warningMsg.style.display = "none";
         if(!snapshotCooldown) statusBar.textContent = ""; 
         updateSpheresState(validFaces);
@@ -693,9 +727,6 @@ async function captureAndAnalyze() {
       } else {
         updateSpheresState([]); 
         warningMsg.style.display = "block";
-        if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
-          resetSystem();
-        }
       }
     } catch (e) { console.log("Skip"); } 
     finally { isProcessing = false; }
@@ -903,4 +934,3 @@ animate();
 </script>
 </body>
 </html>
-
