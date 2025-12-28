@@ -91,7 +91,7 @@
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* Polaroid */
+    /* Polaroid Styling */
     .polaroid {
       position: fixed; top: 50%; left: 50%; width: 280px; 
       background: #fff; padding: 15px 15px 50px 15px;
@@ -103,7 +103,13 @@
       transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
       transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
     }
-    .polaroid img { width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; }
+    
+    /* [수정 1] 폴라로이드 사진 투명도 추가 */
+    .polaroid img { 
+        width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; 
+        opacity: 0.85; /* 약간 투명하게 */
+    }
+    
     .polaroid-text {
       font-family: 'Caveat', cursive; font-size: 28px; color: #222;
       text-align: center; margin-top: 15px; line-height: 1.1;
@@ -142,10 +148,11 @@
     }
     .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
     
-    /* [수정] 갤러리 이미지 필터 밝게 조정 */
+    /* [수정] 갤러리 이미지도 투명도 적용 및 필터 조정 */
     .gallery-item img { 
         width: 100%; display: block; border: 1px solid #eee; 
-        filter: brightness(0.85) contrast(1.2) saturate(1.1);
+        opacity: 0.9;
+        filter: brightness(0.9) contrast(1.2) saturate(1.1);
     }
     
     #gallery-controls { margin-top: 30px; display: flex; gap: 20px; }
@@ -276,6 +283,7 @@ let stream = null;
 let isRunning = false;
 let isProcessing = false;
 let loopInterval = null;
+let lastFaceDetectedTime = 0; 
 let snapshotCooldown = false;
 let photoCount = 0; 
 let createdPolaroids = []; 
@@ -290,22 +298,18 @@ let touchEndX = 0;
 
 const MIN_FACE_SIZE = 0.15;  
 
-// [NEW] 전역 비활동 타이머 설정 (1분)
 let inactivityTimer = null;
-const INACTIVITY_LIMIT = 60000; // 60초
+const INACTIVITY_LIMIT = 60000; 
 
 function resetInactivityTimer() {
-    if (!isRunning && galleryScreen.style.display === 'none') return; // 시작 전이면 무시
-
+    if (!isRunning && galleryScreen.style.display === 'none') return; 
     clearTimeout(inactivityTimer);
-    // 1분 뒤 리셋 실행
     inactivityTimer = setTimeout(() => {
-        console.log("Inactivity Timeout reached. Resetting system.");
+        console.log("Inactivity Timeout. Resetting.");
         resetSystem();
     }, INACTIVITY_LIMIT);
 }
 
-// 모든 사용자 입력에 대해 타이머 리셋
 document.addEventListener('touchstart', resetInactivityTimer, {passive: true});
 document.addEventListener('mousedown', resetInactivityTimer, {passive: true});
 document.addEventListener('keydown', resetInactivityTimer, {passive: true});
@@ -325,7 +329,7 @@ startBtn.addEventListener("click", async () => {
     galleryBtn.style.display = "block";
     statusBar.textContent = "Ready";
     
-    resetInactivityTimer(); // 타이머 시작
+    resetInactivityTimer(); 
     startARLoop();
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
@@ -334,7 +338,7 @@ startBtn.addEventListener("click", async () => {
 function resetSystem() {
   console.log("Session Reset");
   clearInterval(loopInterval);
-  clearTimeout(inactivityTimer); // 타이머 해제
+  clearTimeout(inactivityTimer); 
   isRunning = false;
   isProcessing = false;
 
@@ -475,7 +479,7 @@ resetBtn.addEventListener("click", () => {
 });
 
 
-// [Snapshot Logic with Enhanced Brightness]
+// [Snapshot Logic with Bright Sphere & Transparent Photo]
 function triggerSnapshot(label) {
   if(snapshotCooldown) return;
   snapshotCooldown = true;
@@ -494,12 +498,15 @@ function triggerSnapshot(label) {
   ctx.drawImage(videoElement, -640, 0, 640, 480);
   ctx.restore();
 
-  // [NEW] 2. Darken the video background slightly
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // 40% 어둡게 오버레이
+  // 2. Darken background slightly
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
   ctx.fillRect(0, 0, 640, 480);
 
-  // 3. Draw Sphere on top (It will look brighter now)
+  // [수정 2] 구체를 그릴 때 'screen' 블렌딩 모드 사용 (빛나는 효과 극대화)
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen'; 
   ctx.drawImage(renderer.domElement, 0, 0, 640, 480);
+  ctx.restore();
 
   const imgData = captureCanvas.toDataURL("image/jpeg");
   capturedImagesData.push({ src: imgData, label: label });
@@ -565,6 +572,7 @@ async function captureAndAnalyze() {
       const res = await fetch(SERVER_URL, { method: "POST", body: form });
       if(!res.ok) throw new Error("Error");
       const data = await res.json();
+      const now = Date.now();
 
       let validFaces = [];
       if (data.status === "ok" && data.faces_list) {
@@ -572,11 +580,11 @@ async function captureAndAnalyze() {
       }
 
       if (validFaces.length > 0) {
+        lastFaceDetectedTime = now;
         warningMsg.style.display = "none";
         if(!snapshotCooldown) statusBar.textContent = ""; 
         updateSpheresState(validFaces);
 
-        // 1. First Shot Check
         if (!hasTakenFirstShot && !snapshotCooldown) {
             hasTakenFirstShot = true;
             triggerSnapshot("First Emotion");
@@ -584,7 +592,6 @@ async function captureAndAnalyze() {
             return; 
         }
 
-        // 2. Emotion Logic
         if (!snapshotCooldown) {
             let triggeredLabel = null;
 
@@ -594,7 +601,6 @@ async function captureAndAnalyze() {
                 const sorrow = f.emotions.sorrow;
                 const surprise = f.emotions.surprise;
 
-                // Priority 1: Compound (> 0.6)
                 const C_TH = 0.6;
                 let compound = null;
                 if (joy > C_TH && surprise > C_TH) compound = "Ecstatic";
@@ -609,7 +615,6 @@ async function captureAndAnalyze() {
                     break;
                 }
 
-                // Priority 2: Pure (> 0.8)
                 const P_TH = 0.8;
                 let pure = null;
                 if (!compound) {
@@ -624,7 +629,6 @@ async function captureAndAnalyze() {
                     break;
                 }
 
-                // Priority 3: Serenity (All <= 0.2)
                 if (!compound && !pure) {
                     if (joy <= 0.2 && anger <= 0.2 && sorrow <= 0.2 && surprise <= 0.2) {
                         let serenity = "Pure Serenity";
@@ -645,6 +649,9 @@ async function captureAndAnalyze() {
       } else {
         updateSpheresState([]); 
         warningMsg.style.display = "block";
+        if (now - lastFaceDetectedTime > RESET_TIMEOUT) {
+          resetSystem();
+        }
       }
     } catch (e) { console.log("Skip"); } 
     finally { isProcessing = false; }
