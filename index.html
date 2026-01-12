@@ -458,7 +458,7 @@ function openGallery() {
         <img src="${data.src}">
         <div class="polaroid-text">${data.label}</div>
         <div class="polaroid-watermark">
-          2026 ADD+ 도리를 찾아서<br>Emotional Sphere
+          2026 ADD+ Oscillation<br>Emotional Sphere
         </div>
       `;
       galleryContainer.appendChild(item);
@@ -488,16 +488,15 @@ function startGalleryTimer() {
     }, 1000);
 }
 
-// Gallery Interaction Reset Timer? -> No, hard limit 30s as requested.
-// If you want interaction to extend time, uncomment below:
-/*
+
+
 function extendGalleryTime() {
     galleryTimeLeft = 30;
     galleryTimerDisplay.textContent = galleryTimeLeft;
 }
 galleryScreen.addEventListener('click', extendGalleryTime);
 galleryScreen.addEventListener('touchstart', extendGalleryTime);
-*/
+
 
 function updateGalleryPosition() {
     const items = document.querySelectorAll('.gallery-item');
@@ -597,7 +596,7 @@ function triggerSnapshot(label) {
     <img src="${imgData}">
     <div class="polaroid-text">${label}</div>
     <div class="polaroid-watermark">
-      2026 ADD+ 도리를 찾아서<br>
+      2026 ADD+ Oscillation<br>
       Emotional Sphere
     </div>
   `;
@@ -693,7 +692,7 @@ async function captureAndAnalyze() {
                     break;
                 }
 
-                const P_TH = 0.8;
+                const P_TH = 0.7;
                 let pure = null;
                 if (!compound) {
                     if (joy > P_TH) pure = "Pure Joy";
@@ -934,3 +933,4 @@ animate();
 </script>
 </body>
 </html>
+
