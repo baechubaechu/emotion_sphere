@@ -143,7 +143,9 @@
     #gallery-container {
       display: flex; align-items: center;
       transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
-      will-change: transform; padding-left: 50%;
+      will-change: transform; 
+      /* [수정] 중앙 정렬 로직을 JS로 제어하기 위해 패딩 제거 */
+      padding-left: 0; 
     }
     .gallery-item {
       flex: 0 0 auto; width: 300px; 
@@ -195,12 +197,13 @@
         #timer-display { font-size: 60px; margin-top: 5px; }
         #status-bar { font-size: 14px; margin-top: 5px; }
         
+        /* [수정] 폴라로이드 크기 축소 (55vw -> 45vw) */
         .polaroid { 
-            width: 55vw; 
-            padding: 10px 10px 40px 10px; 
+            width: 45vw; 
+            padding: 8px 8px 30px 8px; 
         }
-        .polaroid-text { font-size: 18px; margin-top: 10px; } 
-        .polaroid-watermark { font-size: 7px; margin-top: 8px; }
+        .polaroid-text { font-size: 16px; margin-top: 8px; } 
+        .polaroid-watermark { font-size: 6px; margin-top: 6px; }
 
         .gallery-item {
             width: 65vw; 
@@ -367,7 +370,7 @@ startBtn.addEventListener("click", async () => {
     // 2. Show Intro (Blackout with Text)
     introOverlay.classList.add('active');
 
-    // 3. Wait 0.5 seconds (Faster), then Start Session
+    // 3. [수정] Wait 2 seconds (다시 2초로 복구)
     setTimeout(() => {
         introOverlay.classList.remove('active');
         uiLayer.classList.add('visible'); // Show UI
@@ -376,7 +379,7 @@ startBtn.addEventListener("click", async () => {
         statusBar.textContent = "Ready";
         
         startSession();
-    }, 500); // 0.5초로 단축
+    }, 2000); 
 
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
@@ -391,7 +394,7 @@ function startSession() {
     timerDisplay.textContent = sessionTimeLeft;
     timerDisplay.style.color = "#fff";
     
-    // [FIX] Start Analyzing IMMEDIATELY (Don't wait 700ms)
+    // Start Analyzing IMMEDIATELY
     captureAndAnalyze();
 
     // Start AR Loop
@@ -468,7 +471,7 @@ galleryBtn.addEventListener("click", () => {
 function openGallery() {
   galleryContainer.innerHTML = "";
   if (capturedImagesData.length === 0) {
-    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px; margin-left: -50%;">NO PHOTOS CAPTURED</div>';
+    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px; margin-left: 0;">NO PHOTOS CAPTURED</div>'; // 정렬 수정
     galleryContainer.style.transform = 'translateX(0)';
   } else {
     capturedImagesData.forEach((data, index) => {
@@ -522,6 +525,7 @@ galleryScreen.addEventListener('click', extendGalleryTime);
 galleryScreen.addEventListener('touchstart', extendGalleryTime);
 
 
+// [수정] 갤러리 정렬 로직 완전 수정 (화면 중앙 강제 정렬)
 function updateGalleryPosition() {
     const items = document.querySelectorAll('.gallery-item');
     if (items.length === 0) return;
@@ -533,10 +537,18 @@ function updateGalleryPosition() {
         }
     });
 
-    const itemTotalWidth = 340; 
-    const moveX = -(currentGalleryIndex * itemTotalWidth);
-    const offset = -150; 
-    galleryContainer.style.transform = `translateX(${moveX + offset}px)`;
+    const activeItem = items[currentGalleryIndex];
+    if (!activeItem) return;
+
+    // Viewport의 중앙
+    const viewportCenter = galleryViewport.offsetWidth / 2;
+    // Item의 중심 좌표 (offsetLeft는 컨테이너 기준)
+    const itemCenter = activeItem.offsetLeft + (activeItem.offsetWidth / 2);
+    
+    // 중앙에 오게 하려면 이동해야 할 거리
+    const moveX = viewportCenter - itemCenter;
+
+    galleryContainer.style.transform = `translateX(${moveX}px)`;
 }
 
 galleryViewport.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
@@ -636,9 +648,7 @@ function triggerSnapshot(label) {
   setTimeout(() => {
     dimOverlay.classList.remove('active');
 
-    // [FIX] Stacking Logic (Instead of spreading out)
-    // Pile them in the corner with random jitter
-    const jitterX = (Math.random() - 0.5) * 20; // -10 to 10px
+    const jitterX = (Math.random() - 0.5) * 20; 
     const jitterY = (Math.random() - 0.5) * 20;
     
     const targetRight = 20 + jitterX;
@@ -654,7 +664,7 @@ function triggerSnapshot(label) {
     
     setTimeout(() => { snapshotCooldown = false; }, 2000);
 
-  }, 300); // [FIX] Move away after 0.3s (Much faster)
+  }, 1000); // [수정] 다시 1초로 복구 (중앙 확인 시간)
 }
 
 async function captureAndAnalyze() {
