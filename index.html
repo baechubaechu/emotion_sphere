@@ -1,936 +1,192 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Emotional Sphere Project</title>
+<style>
+  /* === [1. 기본 레이아웃 (공통)] === */
+  body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; }
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Pretendard:wght@300;500;700&display=swap" rel="stylesheet">
+  #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; }
-    
-    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
-
-    /* Dim Overlay (Flash & Intro) */
-    #dim-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 80; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-    }
-    #dim-overlay.active { opacity: 1; }
-
-    /* [NEW] Intro Overlay (Blackout) */
-    #intro-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; z-index: 150; /* Start Screen보다 위 */
-      display: flex; justify-content: center; align-items: center;
-      opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
-    }
-    #intro-overlay.active { opacity: 1; pointer-events: auto; }
-    #intro-text {
-      color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
-      text-align: center; line-height: 1.6;
-    }
-
-    /* Camera */
-    #cam {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: cover; transform: scaleX(-1); z-index: 1;
-      filter: brightness(0.7) contrast(1.1); 
-    }
-    /* Three.js */
-    #three-canvas {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 2; pointer-events: none;
-    }
-
-    /* UI Layer */
-    #ui-layer {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 90; pointer-events: none;
-      display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-      padding: 30px; box-sizing: border-box;
-      opacity: 0; transition: opacity 0.5s; /* 인트로 때는 숨김 */
-    }
-    #ui-layer.visible { opacity: 1; }
-
-    #brand-title {
-      font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
-      margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
-    }
-
-    /* Timer Display */
-    #timer-display {
-      font-size: 48px; font-weight: 700; color: #fff;
-      margin-top: 10px; letter-spacing: 2px;
-      text-shadow: 0 0 20px rgba(255,255,255,0.5);
-      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
-    }
-    #timer-label {
-      font-size: 12px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 2px; margin-top: -5px;
-    }
-
-    #status-bar {
-      margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
-      transition: opacity 0.5s; min-height: 20px;
-    }
-
-    #controls { 
-      margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
-    }
-    
-    button.main-btn {
-      padding: 14px 30px; border: 1px solid rgba(255, 255, 255, 0.5);
-      background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-      transition: all 0.3s;
-    }
-    button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
-
-    button.exit-btn {
-      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
-      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-      display: none;
-    }
-    button.exit-btn:active { transform: scale(0.95); background: rgba(150, 0, 0, 0.6); }
-
-    /* Flash */
-    #flash-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #fff; z-index: 9999; pointer-events: none;
-      opacity: 0; transition: opacity 0.1s ease-out;
-    }
-
-    /* Polaroid */
-    .polaroid {
-      position: fixed; top: 50%; left: 50%; width: 280px; 
-      background: #fff; padding: 15px 15px 50px 15px;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.6); z-index: 95;
-      transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
-      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); opacity: 0;
-    }
-    .polaroid.animate-to-corner {
-      transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
-      transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
-    }
-    .polaroid img { 
-        width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; 
-        opacity: 0.85; 
-    }
-    .polaroid-text {
-      font-family: 'Caveat', cursive; font-size: 28px; color: #222;
-      text-align: center; margin-top: 15px; line-height: 1.1;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .polaroid-watermark {
-      font-family: 'Pretendard', sans-serif; font-size: 8px; color: #888;
-      text-align: center; margin-top: 12px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
-      border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
-    }
-
-    /* Gallery Screen */
-    #gallery-screen {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(10, 10, 10, 0.98); z-index: 200; 
-      display: none; flex-direction: column; justify-content: center; align-items: center;
-      opacity: 0; transition: opacity 0.5s;
-    }
-    #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
-
-    #gallery-viewport {
-        width: 100%; height: 65%; overflow: hidden;
-        display: flex; align-items: center; position: relative;
-    }
-    #gallery-container {
-      display: flex; align-items: center;
-      transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
-      will-change: transform; padding-left: 50%;
-    }
-    .gallery-item {
-      flex: 0 0 auto; width: 300px; 
-      background: #fff; padding: 15px 15px 60px 15px;
-      box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      margin-right: 40px; transform: scale(0.5); opacity: 0.5; z-index: 1;
-      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-    }
-    .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
-    .gallery-item img { 
-        width: 100%; display: block; border: 1px solid #eee; 
-        opacity: 0.9;
-        filter: brightness(0.9) contrast(1.2) saturate(1.1);
-    }
-    
-    #gallery-controls { margin-top: 30px; display: flex; gap: 20px; }
-    button.reset-btn {
-      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
-      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
-      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-    }
-
-    /* Start Screen */
-    #start-screen {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; z-index: 100;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      transition: opacity 0.8s;
-    }
-    #startBtn {
-      border: 1px solid #fff; background: transparent; color: #fff;
-      padding: 15px 40px; font-size: 18px; letter-spacing: 4px;
-      cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
-    }
-    @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-    
-    #warning-msg {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
-      color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
-      display: none; backdrop-filter: blur(10px); text-align: center;
-    }
-    #snap { display: none; }
-  </style>
-</head>
-<body>
-
-<div id="flash-overlay"></div>
-<div id="dim-overlay"></div>
-
-<div id="intro-overlay">
-  <div id="intro-text">
-    1분간 최대한 많은<br>감정을 찾아보세요!
-  </div>
-</div>
-
-<div id="start-screen">
-  <div style="font-size: 12px; color: #888; margin-bottom: 20px;">EMOTIONAL SPHERE PROJECT</div>
-  <button id="startBtn">TOUCH TO START</button>
-</div>
-
-<div id="container">
-  <video id="cam" autoplay playsinline muted></video>
-  <div id="three-canvas"></div>
-</div>
-
-<div id="ui-layer">
-  <div style="display:flex; flex-direction:column; align-items:center;">
-    <div id="brand-title">EMOTIONAL SPHERE</div>
-    
-    <div id="timer-display">60</div>
-    <div id="timer-label">SECONDS LEFT</div>
-    
-    <div id="status-bar"></div>
-  </div>
-  
-  <div id="warning-msg">얼굴을 인식할 수 없습니다</div>
-  
-  <div id="controls">
-    <button id="galleryBtn" class="main-btn" style="display:none;">FINISH & VIEW</button>
-  </div>
-</div>
-
-<div id="gallery-screen">
-  <div style="display:flex; flex-direction:column; align-items:center;">
-    <div id="brand-title" style="margin-bottom:10px;">YOUR EMOTIONAL JOURNEY</div>
-    <div style="color:rgba(255,255,255,0.7); font-size:14px; letter-spacing:1px;">
-      SESSION CLOSING IN <span id="gallery-timer" style="color:#fff; font-weight:bold;">30</span>s
-    </div>
-  </div>
-
-  <div id="gallery-viewport">
-      <div id="gallery-container"></div>
-  </div>
-  <div id="gallery-controls">
-    <button id="resetBtn" class="reset-btn">FINISH (GO TO START)</button>
-  </div>
-</div>
-
-<canvas id="snap"></canvas>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
-<script>
-const SERVER_URL = "https://emotion-server-backend-907115489834.asia-northeast3.run.app/analyze";
-
-/* ================= [0] Noise Function ================= */
-const SimplexNoise = function() {
-  this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
-  this.p = []; for (var i=0; i<256; i++) this.p[i] = Math.floor(Math.random()*256);
-  this.perm = []; for(var i=0; i<512; i++) this.perm[i]=this.p[i & 255];
-};
-SimplexNoise.prototype.dot = function(g, x, y) { return g[0]*x + g[1]*y; };
-SimplexNoise.prototype.noise = function(xin, yin) {
-  var n0, n1, n2; 
-  var F2 = 0.5*(Math.sqrt(3.0)-1.0), G2 = (3.0-Math.sqrt(3.0))/6.0;
-  var s = (xin+yin)*F2; var i = Math.floor(xin+s); var j = Math.floor(yin+s);
-  var t = (i+j)*G2; var X0 = i-t; var Y0 = j-t; var x0 = xin-X0; var y0 = yin-Y0;
-  var i1, j1; 
-  if(x0>y0) {i1=1; j1=0;} else {i1=0; j1=1;}
-  var x1 = x0 - i1 + G2; var y1 = y0 - j1 + G2;
-  var x2 = x0 - 1.0 + 2.0 * G2; var y2 = y0 - 1.0 + 2.0 * G2;
-  var ii = i & 255; var jj = j & 255;
-  var gi0 = this.perm[ii+this.perm[jj]] % 12; var gi1 = this.perm[ii+i1+this.perm[jj+j1]] % 12; var gi2 = this.perm[ii+1+this.perm[jj+1]] % 12;
-  var t0 = 0.5 - x0*x0 - y0*y0;
-  if(t0<0) n0 = 0.0; else { t0 *= t0; n0 = t0 * t0 * this.dot(this.grad3[gi0], x0, y0); }
-  var t1 = 0.5 - x1*x1 - y1*y1;
-  if(t1<0) n1 = 0.0; else { t1 *= t1; n1 = t1 * t1 * this.dot(this.grad3[gi1], x1, y1); }
-  var t2 = 0.5 - x2*x2 - y2*y2;
-  if(t2<0) n2 = 0.0; else { t2 *= t2; n2 = t2 * t2 * this.dot(this.grad3[gi2], x2, y2); }
-  return 70.0 * (n0 + n1 + n2);
-};
-const noise = new SimplexNoise();
-
-
-/* ================= [1] System Logic ================= */
-const videoElement = document.getElementById("cam");
-const statusBar = document.getElementById("status-bar");
-const warningMsg = document.getElementById("warning-msg");
-const startBtn = document.getElementById("startBtn");
-const startScreen = document.getElementById("start-screen");
-const uiLayer = document.getElementById("ui-layer");
-const introOverlay = document.getElementById("intro-overlay");
-
-// Timers
-const timerDisplay = document.getElementById("timer-display");
-const galleryTimerDisplay = document.getElementById("gallery-timer");
-
-const galleryBtn = document.getElementById("galleryBtn"); // Finish Early
-
-const galleryScreen = document.getElementById("gallery-screen");
-const galleryViewport = document.getElementById("gallery-viewport");
-const galleryContainer = document.getElementById("gallery-container");
-const resetBtn = document.getElementById("resetBtn");
-
-const flashOverlay = document.getElementById("flash-overlay");
-const dimOverlay = document.getElementById("dim-overlay");
-
-let stream = null;
-let isRunning = false;
-let isProcessing = false;
-let loopInterval = null;
-let snapshotCooldown = false;
-let photoCount = 0; 
-let createdPolaroids = []; 
-let capturedImagesData = [];
-
-let capturedEmotionsSet = new Set();
-let hasTakenFirstShot = false;
-
-// Gallery Vars
-let currentGalleryIndex = 0;
-let touchStartX = 0;
-let touchEndX = 0;
-
-// Timers
-let sessionTimeLeft = 60;
-let sessionTimerInterval = null;
-let galleryTimeLeft = 30;
-let galleryTimerInterval = null;
-
-const MIN_FACE_SIZE = 0.15;  
-
-// Start Button Click
-startBtn.addEventListener("click", async () => {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-    videoElement.srcObject = stream;
-    videoElement.play();
-    
-    // 1. Hide Start Screen
-    startScreen.style.opacity = 0;
-    setTimeout(() => { startScreen.style.display = "none"; }, 500);
-    
-    // 2. Show Intro (Blackout with Text)
-    introOverlay.classList.add('active');
-
-    // 3. Wait 2 seconds, then Start Session
-    setTimeout(() => {
-        introOverlay.classList.remove('active');
-        uiLayer.classList.add('visible'); // Show UI
-        
-        galleryBtn.style.display = "block";
-        statusBar.textContent = "Ready";
-        
-        startSession();
-    }, 2000);
-
-  } catch (e) { alert("카메라 권한이 필요합니다."); }
-});
-
-// Start Session (1 Minute)
-function startSession() {
-    if (isRunning) return;
-    isRunning = true;
-    
-    // Init Timer
-    sessionTimeLeft = 60;
-    timerDisplay.textContent = sessionTimeLeft;
-    timerDisplay.style.color = "#fff";
-    
-    // Start AR Loop
-    loopInterval = setInterval(() => {
-        if (!isProcessing) captureAndAnalyze();
-    }, 700);
-
-    // Start Session Countdown
-    sessionTimerInterval = setInterval(() => {
-        sessionTimeLeft--;
-        timerDisplay.textContent = sessionTimeLeft;
-        
-        if (sessionTimeLeft <= 10) timerDisplay.style.color = "#ff5555";
-
-        if (sessionTimeLeft <= 0) {
-            finishSession();
-        }
-    }, 1000);
-}
-
-// Finish Session -> Go to Gallery
-function finishSession() {
-    clearInterval(loopInterval);
-    clearInterval(sessionTimerInterval);
-    isRunning = false;
-    
-    openGallery();
-}
-
-// Full Reset (Go to Start)
-function resetSystem() {
-  console.log("System Reset");
-  clearInterval(loopInterval);
-  clearInterval(sessionTimerInterval);
-  clearInterval(galleryTimerInterval);
-  isRunning = false;
-  isProcessing = false;
-
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    stream = null;
+  /* 카메라 비율 유지하며 꽉 채우기 */
+  #cam {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover; transform: scaleX(-1); z-index: 1;
+    filter: brightness(0.7) contrast(1.1); 
   }
-  videoElement.srcObject = null;
-
-  startScreen.style.display = "flex";
-  galleryScreen.classList.remove("active");
-  uiLayer.classList.remove("visible"); // Hide Main UI
-  
-  setTimeout(() => { startScreen.style.opacity = 1; }, 10);
-  
-  galleryBtn.style.display = "none";
-  warningMsg.style.display = "none";
-  statusBar.textContent = "";
-  
-  updateSpheresState([]);
-
-  createdPolaroids.forEach(el => el.remove());
-  createdPolaroids = [];
-  capturedImagesData = [];
-  photoCount = 0;
-  capturedEmotionsSet.clear(); 
-  hasTakenFirstShot = false; 
-  
-  galleryContainer.innerHTML = '';
-  galleryContainer.style.transform = 'translateX(0)';
-}
-
-// Manual Finish
-galleryBtn.addEventListener("click", () => {
-    finishSession();
-});
-
-// Open Gallery
-function openGallery() {
-  galleryContainer.innerHTML = "";
-  if (capturedImagesData.length === 0) {
-    galleryContainer.innerHTML = '<div style="color:#888; font-size:14px; margin-left: -50%;">NO PHOTOS CAPTURED</div>';
-    galleryContainer.style.transform = 'translateX(0)';
-  } else {
-    capturedImagesData.forEach((data, index) => {
-      const item = document.createElement('div');
-      item.className = 'gallery-item';
-      item.onclick = () => {
-          currentGalleryIndex = index;
-          updateGalleryPosition();
-      }
-      item.innerHTML = `
-        <img src="${data.src}">
-        <div class="polaroid-text">${data.label}</div>
-        <div class="polaroid-watermark">
-          2026 ADD+ Oscillation<br>Emotional Sphere
-        </div>
-      `;
-      galleryContainer.appendChild(item);
-    });
-    
-    currentGalleryIndex = capturedImagesData.length - 1;
-    updateGalleryPosition();
+  #three-canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 2; pointer-events: none;
   }
 
-  galleryScreen.classList.add("active");
-  startGalleryTimer();
-}
+  /* === [2. UI 레이어 (반응형 적용)] === */
+  #ui-layer {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 90; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    /* 노치 디자인 대응 (아이폰 등) */
+    padding: max(30px, env(safe-area-inset-top)) 20px max(30px, env(safe-area-inset-bottom)) 20px;
+    box-sizing: border-box;
+    opacity: 0; transition: opacity 0.5s;
+  }
+  #ui-layer.visible { opacity: 1; }
 
-// Gallery Countdown (30s)
-function startGalleryTimer() {
-    galleryTimeLeft = 30;
-    galleryTimerDisplay.textContent = galleryTimeLeft;
-    
-    clearInterval(galleryTimerInterval);
-    galleryTimerInterval = setInterval(() => {
-        galleryTimeLeft--;
-        galleryTimerDisplay.textContent = galleryTimeLeft;
-        
-        if (galleryTimeLeft <= 0) {
-            resetSystem();
-        }
-    }, 1000);
-}
-
-
-
-function extendGalleryTime() {
-    galleryTimeLeft = 30;
-    galleryTimerDisplay.textContent = galleryTimeLeft;
-}
-galleryScreen.addEventListener('click', extendGalleryTime);
-galleryScreen.addEventListener('touchstart', extendGalleryTime);
-
-
-function updateGalleryPosition() {
-    const items = document.querySelectorAll('.gallery-item');
-    if (items.length === 0) return;
-
-    items.forEach((item, index) => {
-        item.classList.remove('active');
-        if (index === currentGalleryIndex) {
-            item.classList.add('active');
-        }
-    });
-
-    const itemTotalWidth = 340; 
-    const moveX = -(currentGalleryIndex * itemTotalWidth);
-    const offset = -150; 
-    galleryContainer.style.transform = `translateX(${moveX + offset}px)`;
-}
-
-galleryViewport.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
-galleryViewport.addEventListener('touchend', e => { touchEndX = e.changedTouches[0].screenX; handleSwipe(); }, false);
-galleryViewport.addEventListener('mousedown', e => { touchStartX = e.screenX; }, false);
-galleryViewport.addEventListener('mouseup', e => { touchEndX = e.screenX; handleSwipe(); }, false);
-
-function handleSwipe() {
-    const threshold = 50; 
-    if (touchEndX < touchStartX - threshold) {
-        if (currentGalleryIndex < capturedImagesData.length - 1) {
-            currentGalleryIndex++;
-            updateGalleryPosition();
-        }
-    }
-    if (touchEndX > touchStartX + threshold) {
-        if (currentGalleryIndex > 0) {
-            currentGalleryIndex--;
-            updateGalleryPosition();
-        }
-    }
-}
-
-resetBtn.addEventListener("click", () => {
-  resetSystem();
-});
-
-
-// [Snapshot Logic]
-function triggerSnapshot(label) {
-  if(snapshotCooldown) return;
-  snapshotCooldown = true;
-  photoCount++;
-
-  capturedEmotionsSet.add(label);
-
-  const w = renderer.domElement.width;
-  const h = renderer.domElement.height;
-  
-  const captureCanvas = document.createElement("canvas");
-  captureCanvas.width = w;
-  captureCanvas.height = h;
-  const ctx = captureCanvas.getContext("2d");
-  
-  // Video Cover Logic
-  const vw = videoElement.videoWidth;
-  const vh = videoElement.videoHeight;
-  const screenAspect = w / h;
-  const videoAspect = vw / vh;
-  let drawW, drawH, startX, startY;
-
-  if (screenAspect > videoAspect) {
-    drawW = w; drawH = w / videoAspect;
-    startX = 0; startY = (h - drawH) / 2;
-  } else {
-    drawW = h * videoAspect; drawH = h;
-    startX = (w - drawW) / 2; startY = 0;
+  #brand-title {
+    font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
+    margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
+    text-align: center;
   }
 
-  ctx.save();
-  ctx.translate(w, 0); ctx.scale(-1, 1); 
-  ctx.drawImage(videoElement, startX, startY, drawW, drawH);
-  ctx.restore();
+  /* 타이머: 화면 크기에 따라 글자 크기 자동 조절 (clamp 사용) */
+  #timer-display {
+    font-size: clamp(40px, 10vw, 80px); /* 최소 40px, 권장 10vw, 최대 80px */
+    font-weight: 700; color: #fff;
+    margin-top: 10px; letter-spacing: 2px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.5);
+    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+  }
+  #timer-label {
+    font-size: 12px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 2px; margin-top: -5px;
+  }
 
-  // Dark Overlay
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; 
-  ctx.fillRect(0, 0, w, h);
+  #status-bar {
+    margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+    transition: opacity 0.5s; min-height: 20px; text-align: center;
+  }
 
-  // Sphere Overlay (Screen Blend)
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen'; 
-  ctx.drawImage(renderer.domElement, 0, 0, w, h);
-  ctx.restore();
-
-  const imgData = captureCanvas.toDataURL("image/jpeg");
-  capturedImagesData.push({ src: imgData, label: label });
-
-  const polaroid = document.createElement('div');
-  polaroid.className = 'polaroid';
-  polaroid.innerHTML = `
-    <img src="${imgData}">
-    <div class="polaroid-text">${label}</div>
-    <div class="polaroid-watermark">
-      2026 ADD+ Oscillation<br>
-      Emotional Sphere
-    </div>
-  `;
-  document.body.appendChild(polaroid);
-  createdPolaroids.push(polaroid);
-
-  flashOverlay.style.opacity = 1;
-  setTimeout(() => { flashOverlay.style.opacity = 0; }, 100);
+  #controls { 
+    margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
+  }
   
-  dimOverlay.classList.add('active');
-  polaroid.style.opacity = 1; 
+  button.main-btn {
+    padding: 14px 30px; border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
+    cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+    transition: all 0.3s;
+    white-space: nowrap; /* 버튼 텍스트 줄바꿈 방지 */
+  }
+  button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
 
-  setTimeout(() => {
-    dimOverlay.classList.remove('active');
+  /* === [3. 오버레이 및 팝업] === */
+  #intro-overlay, #dim-overlay, #flash-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  #dim-overlay { background: rgba(0, 0, 0, 0.8); z-index: 80; opacity: 0; transition: opacity 0.3s ease; }
+  #dim-overlay.active { opacity: 1; }
+  
+  #flash-overlay { background: #fff; z-index: 9999; opacity: 0; transition: opacity 0.1s ease-out; }
 
-    const offsetX = (photoCount - 1) * 100; 
-    const targetRight = 20 + offsetX;
-    const targetBottom = 30; 
+  #intro-overlay {
+    background: #000; z-index: 150;
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.5s ease;
+  }
+  #intro-overlay.active { opacity: 1; pointer-events: auto; }
+  #intro-text {
+    color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
+    text-align: center; line-height: 1.6;
+    padding: 0 20px; /* 모바일에서 텍스트 잘림 방지 */
+  }
 
-    polaroid.style.top = 'auto';
-    polaroid.style.left = 'auto';
-    polaroid.style.right = targetRight + 'px';
-    polaroid.style.bottom = targetBottom + 'px';
+  #start-screen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; z-index: 100;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    transition: opacity 0.8s;
+  }
+  #startBtn {
+    border: 1px solid #fff; background: transparent; color: #fff;
+    padding: 15px 40px; font-size: 18px; letter-spacing: 4px;
+    cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
+    max-width: 80%; /* 모바일에서 버튼 너무 크면 줄임 */
+  }
+
+  /* === [4. 폴라로이드 & 갤러리 (반응형 핵심)] === */
+  .polaroid {
+    position: fixed; top: 50%; left: 50%; 
+    /* 고정 px 대신 화면 비율(vw) 사용 */
+    width: clamp(200px, 60vw, 350px); 
+    background: #fff; padding: 15px 15px 50px 15px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6); z-index: 95;
+    transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); opacity: 0;
+  }
+  .polaroid.animate-to-corner {
+    transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
+    transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
+  }
+  .polaroid img { width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; opacity: 0.85; }
+  .polaroid-text {
+    font-family: 'Caveat', cursive; font-size: clamp(18px, 5vw, 28px); 
+    color: #222; text-align: center; margin-top: 15px; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .polaroid-watermark {
+    font-family: 'Pretendard', sans-serif; font-size: 8px; color: #888;
+    text-align: center; margin-top: 12px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
+    border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
+  }
+
+  /* 갤러리 화면 */
+  #gallery-screen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(10, 10, 10, 0.98); z-index: 200; 
+    display: none; flex-direction: column; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.5s;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
+
+  #gallery-viewport {
+    width: 100%; height: 60%; overflow: hidden;
+    display: flex; align-items: center; position: relative;
+  }
+  #gallery-container {
+    display: flex; align-items: center;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
+    will-change: transform; padding-left: 50%;
+  }
+
+  .gallery-item {
+    flex: 0 0 auto; 
+    /* 모바일에서는 화면의 70%, 태블릿에선 300px 고정 */
+    width: clamp(240px, 70vw, 400px);
+    background: #fff; padding: 15px 15px 60px 15px;
+    box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    margin-right: 20px; transform: scale(0.5); opacity: 0.5; z-index: 1;
+    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
+  .gallery-item img { 
+    width: 100%; display: block; border: 1px solid #eee; 
+    opacity: 0.9; filter: brightness(0.9) contrast(1.2) saturate(1.1);
+  }
+
+  #gallery-controls { margin-top: 20px; display: flex; gap: 20px; }
+  
+  /* 경고 메시지 & 캔버스 */
+  #warning-msg {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
+    color: #ffcece; font-size: 16px; padding: 15px 30px; border-radius: 8px;
+    display: none; backdrop-filter: blur(10px); text-align: center;
+    width: 80%; /* 모바일 대응 */
+  }
+  #snap { display: none; }
+
+  @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+  /* === [5. 모바일 전용 미디어 쿼리] === */
+  /* 화면 폭이 좁은 스마트폰(세로 모드)일 때 강제 조정 */
+  @media (max-width: 768px) {
+    #timer-display { margin-top: 5px; }
+    #status-bar { font-size: 14px; margin-top: 5px; }
+    #brand-title { font-size: 12px; margin-top: 0; }
     
-    polaroid.style.transform = `scale(0.35) rotate(${Math.random() * 10 - 5}deg)`; 
-    polaroid.classList.add('animate-to-corner');
+    /* 갤러리 아이템 간격 좁히기 */
+    .gallery-item { margin-right: 15px; padding-bottom: 50px; }
     
-    setTimeout(() => { snapshotCooldown = false; }, 2000);
-
-  }, 1000); 
-}
-
-async function captureAndAnalyze() {
-  isProcessing = true;
-
-  const canvas = document.getElementById("snap");
-  const ctx = canvas.getContext("2d");
-  canvas.width = 640;
-  canvas.height = 480;
-  ctx.save(); ctx.scale(-1, 1);
-  ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
-  ctx.restore();
-
-  const basicMeta = { device: navigator.userAgent };
-
-  canvas.toBlob(async blob => {
-    const form = new FormData();
-    form.append("frame", blob, "frame.jpg");
-    form.append("metadata", JSON.stringify(basicMeta));
+    /* 갤러리 컨트롤 버튼 크기 조정 */
+    button.reset-btn { font-size: 14px; padding: 12px 25px; }
     
-    try {
-      const res = await fetch(SERVER_URL, { method: "POST", body: form });
-      if(!res.ok) throw new Error("Error");
-      const data = await res.json();
-
-      let validFaces = [];
-      if (data.status === "ok" && data.faces_list) {
-        validFaces = data.faces_list.filter(f => f.pose.boxSize >= MIN_FACE_SIZE);
-      }
-
-      if (validFaces.length > 0) {
-        warningMsg.style.display = "none";
-        if(!snapshotCooldown) statusBar.textContent = ""; 
-        updateSpheresState(validFaces);
-
-        if (!hasTakenFirstShot && !snapshotCooldown) {
-            hasTakenFirstShot = true;
-            triggerSnapshot("First Emotion");
-            statusBar.textContent = "Welcome!";
-            return; 
-        }
-
-        if (!snapshotCooldown) {
-            let triggeredLabel = null;
-
-            for (let f of validFaces) {
-                const joy = f.emotions.joy;
-                const anger = f.emotions.anger;
-                const sorrow = f.emotions.sorrow;
-                const surprise = f.emotions.surprise;
-
-                const C_TH = 0.6;
-                let compound = null;
-                if (joy > C_TH && surprise > C_TH) compound = "Ecstatic";
-                else if (joy > C_TH && sorrow > C_TH) compound = "Ambivalent";
-                else if (joy > C_TH && anger > C_TH) compound = "Manic";
-                else if (anger > C_TH && sorrow > C_TH) compound = "Frustrated";
-                else if (anger > C_TH && surprise > C_TH) compound = "Outraged";
-                else if (sorrow > C_TH && surprise > C_TH) compound = "Shocked";
-
-                if (compound && !capturedEmotionsSet.has(compound)) {
-                    triggeredLabel = compound;
-                    break;
-                }
-
-                const P_TH = 0.7;
-                let pure = null;
-                if (!compound) {
-                    if (joy > P_TH) pure = "Pure Joy";
-                    else if (anger > P_TH) pure = "Furious";
-                    else if (surprise > P_TH) pure = "Freaked Out";
-                    else if (sorrow > P_TH) pure = "Deep Sorrow";
-                }
-
-                if (pure && !capturedEmotionsSet.has(pure)) {
-                    triggeredLabel = pure;
-                    break;
-                }
-
-                if (!compound && !pure) {
-                    if (joy <= 0.2 && anger <= 0.2 && sorrow <= 0.2 && surprise <= 0.2) {
-                        let serenity = "Pure Serenity";
-                        if (!capturedEmotionsSet.has(serenity)) {
-                            triggeredLabel = serenity;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (triggeredLabel) {
-                triggerSnapshot(triggeredLabel);
-                statusBar.textContent = "Moment Captured!";
-            }
-        }
-
-      } else {
-        updateSpheresState([]); 
-        warningMsg.style.display = "block";
-      }
-    } catch (e) { console.log("Skip"); } 
-    finally { isProcessing = false; }
-  }, "image/jpeg", 0.8);
-}
-
-
-/* ================= [2] Three.js Logic ================= */
-let scene, camera, renderer;
-let time = 0;
-const MAX_SPHERES = 6; 
-let spheres = []; 
-const IMG_W = 640; const IMG_H = 480;
-
-class Sphere {
-    constructor(scene) {
-        this.particleCount = 4000; 
-        this.radius = 120; 
-        this.particlesData = [];
-        this.emotions = { joy: 0, sorrow: 0, anger: 0, surprise: 0 };
-        this.pose = { pan: 0, tilt: 0, boxSize: 0.5 };
-        this.targetPos = new THREE.Vector3(0, 0, 0);
-        this.currentPos = new THREE.Vector3(0, 0, 0);
-        this.isActive = false;
-        this.targetOpacity = 0.0;
-        this.currentOpacity = 0.0;
-        this.rotationSpeed = { x: 0, y: 0.002, z: 0 }; 
-        this._initMesh(scene);
-    }
-
-    _initMesh(scene) {
-        const posArray = new Float32Array(this.particleCount * 3);
-        const colorArray = new Float32Array(this.particleCount * 3);
-        for(let i=0; i<this.particleCount; i++) {
-            const phi = Math.acos( -1 + ( 2 * i ) / this.particleCount );
-            const theta = Math.sqrt( this.particleCount * Math.PI ) * phi;
-            const x = this.radius * Math.cos( theta ) * Math.sin( phi );
-            const y = this.radius * Math.sin( theta ) * Math.sin( phi );
-            const z = this.radius * Math.cos( phi );
-            posArray[i*3] = x; posArray[i*3+1] = y; posArray[i*3+2] = z;
-            this.particlesData.push({ ox: x, oy: y, oz: z, seed: Math.random() * 100 });
-            colorArray[i*3] = 1; colorArray[i*3+1] = 1; colorArray[i*3+2] = 1;
-        }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-        const mat = new THREE.PointsMaterial({ 
-            size: 2.5, vertexColors: true, transparent: true, opacity: 0, 
-            blending: THREE.AdditiveBlending, depthWrite: false 
-        });
-        this.mesh = new THREE.Points(geo, mat);
-        this.group = new THREE.Group();
-        this.group.add(this.mesh);
-        scene.add(this.group);
-    }
-
-    updateData(faceData, targetX, targetY) {
-        this.emotions = faceData.emotions;
-        this.pose = faceData.pose;
-        this.isActive = true;
-        this.targetOpacity = 1.0;
-        this.targetPos.set(targetX, targetY, 0);
-    }
-
-    hide() {
-        this.isActive = false;
-        this.targetOpacity = 0.0;
-    }
-
-    animate(time) {
-        this.currentOpacity += (this.targetOpacity - this.currentOpacity) * 0.1;
-        this.mesh.material.opacity = this.currentOpacity;
-        if (this.currentOpacity < 0.01) return;
-
-        this.currentPos.lerp(this.targetPos, 0.08); 
-        this.group.position.copy(this.currentPos);
-
-        const positions = this.mesh.geometry.attributes.position.array;
-        const colors = this.mesh.geometry.attributes.color.array;
-        const { joy, sorrow, anger, surprise } = this.emotions;
-        const { pan, tilt, boxSize } = this.pose;
-
-        this.group.rotation.y += (pan * 2.5 - this.group.rotation.y) * 0.1;
-        this.group.rotation.x += (-tilt * 2.5 - this.group.rotation.x) * 0.1;
-        const squashX = 1.0 - Math.abs(pan) * 0.3; 
-        this.group.scale.x += (squashX - this.group.scale.x) * 0.1;
-
-        let targetSX = 0, targetSY = 0.002, targetSZ = 0; 
-        const baseSpeed = 0.02;
-        if (this.isActive) {
-            if (joy > 0.1) { targetSY = baseSpeed * (1 + joy * 3); } 
-            else if (anger > 0.1) { targetSX = baseSpeed * (1 + anger * 4); targetSZ = baseSpeed * (0.5 + anger * 2); } 
-            else if (sorrow > 0.1) { targetSY = baseSpeed * 0.05; } 
-            else if (surprise > 0.1) { targetSY = baseSpeed * (1 + surprise); }
-        }
-        this.rotationSpeed.x += (targetSX - this.rotationSpeed.x) * 0.05;
-        this.rotationSpeed.y += (targetSY - this.rotationSpeed.y) * 0.05;
-        this.rotationSpeed.z += (targetSZ - this.rotationSpeed.z) * 0.05;
-        this.mesh.rotation.x += this.rotationSpeed.x;
-        this.mesh.rotation.y += this.rotationSpeed.y;
-        this.mesh.rotation.z += this.rotationSpeed.z;
-        
-        const targetScale = 0.5 + (boxSize * 1.8); 
-        const currentScale = this.group.scale.y; 
-        const nextScale = currentScale + (targetScale - currentScale) * 0.1;
-        this.group.scale.set(nextScale * squashX, nextScale, nextScale);
-
-        let tr=0.5, tg=0.5, tb=0.8; 
-        let noiseIntensity = 0.5; let breathingSpeed = 1.0; let pulse = 0.0;          
-
-        if (this.isActive) {
-            if (joy > 0.1) { tr=1.0; tg=0.9; tb=0.2; noiseIntensity = 2.0; pulse = joy * 15; }
-            if (anger > 0.1) { tr=1.0; tg=0.1; tb=0.1; noiseIntensity = 10.0 + anger * 10; breathingSpeed = 5.0; }
-            if (sorrow > 0.1) { tr=0.1; tg=0.3; tb=0.9; noiseIntensity = 1.0; }
-            if (surprise > 0.1) { tr=1.0; tg=1.0; tb=1.0; noiseIntensity = 5.0; pulse = surprise * 25; }
-        }
-
-        for (let i = 0; i < this.particleCount; i++) {
-            const idx = i * 3;
-            const p = this.particlesData[i];
-            let x = p.ox; let y = p.oy; let z = p.oz;
-
-            const n = noise.noise(x * 0.01 + time, y * 0.01 + time * breathingSpeed);
-            const distortion = n * noiseIntensity;
-            const len = Math.sqrt(x*x + y*y + z*z);
-            const nx = x / len; const ny = y / len; const nz = z / len;
-
-            let finalX = x + nx * (distortion + pulse);
-            let finalY = y + ny * (distortion + pulse);
-            let finalZ = z + nz * (distortion + pulse);
-
-            if (sorrow > 0.2) finalY -= Math.abs(n) * (sorrow * 30);
-
-            positions[idx] = finalX; positions[idx+1] = finalY; positions[idx+2] = finalZ;
-
-            colors[idx] += (tr - colors[idx]) * 0.05; 
-            colors[idx+1] += (tg - colors[idx+1]) * 0.05; 
-            colors[idx+2] += (tb - colors[idx+2]) * 0.05;
-        }
-        this.mesh.geometry.attributes.position.needsUpdate = true;
-        this.mesh.geometry.attributes.color.needsUpdate = true;
-    }
-}
-
-function initThree() {
-    const container = document.getElementById("three-canvas");
-    scene = new THREE.Scene(); 
-    scene.background = null; 
-    
-    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
-    camera.position.z = 600; 
-
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    for (let i = 0; i < MAX_SPHERES; i++) {
-        spheres.push(new Sphere(scene));
-    }
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-}
-
-function updateSpheresState(facesList) {
-    const count = Math.min(facesList.length, MAX_SPHERES);
-    const dist = camera.position.z;
-    const vFOV = THREE.Math.degToRad(camera.fov); 
-    const visibleHeight = 2 * Math.tan(vFOV / 2) * dist;
-    const visibleWidth = visibleHeight * camera.aspect;
-
-    for (let i = 0; i < count; i++) {
-        const faceData = facesList[i];
-        const rect = faceData.rect;
-        const centerX = (rect.min_x + rect.max_x) / 2;
-        const centerY = (rect.min_y + rect.max_y) / 2;
-
-        const normX = ((centerX / IMG_W) - 0.5); 
-        const normY = -((centerY / IMG_H) - 0.5); 
-
-        const targetX = normX * visibleWidth;
-        const targetY = normY * visibleHeight;
-
-        spheres[i].updateData(faceData, targetX, targetY);
-    }
-
-    for (let i = count; i < MAX_SPHERES; i++) {
-        spheres[i].hide();
-    }
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    time += 0.01;
-    spheres.forEach(s => s.animate(time));
-    renderer.render(scene, camera);
-}
-
-initThree(); 
-animate();
-</script>
-</body>
-</html>
-
+    /* 인트로 텍스트 줄이기 */
+    #intro-text { font-size: 20px; }
+  }
+</style>
