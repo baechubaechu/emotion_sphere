@@ -10,12 +10,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Pretendard:wght@300;500;700&display=swap" rel="stylesheet">
 
   <style>
-    /* [수정 1] html, body 높이 100% 강제 (모바일 검은 화면 방지) */
+    /* [수정 1] 높이 강제 지정 (모바일 검은 화면 방지) */
     html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; }
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
 
-    /* Dim Overlay (Flash & Intro) */
+    /* Dim Overlay */
     #dim-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.8);
@@ -33,7 +33,7 @@
     #intro-overlay.active { opacity: 1; pointer-events: auto; }
     #intro-text {
       color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
-      text-align: center; line-height: 1.6;
+      text-align: center; line-height: 1.6; padding: 0 20px;
     }
 
     /* Camera */
@@ -61,7 +61,7 @@
     #brand-title {
       font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
       margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
-      text-align: center; /* 텍스트 중앙 정렬 추가 */
+      text-align: center;
     }
 
     /* Timer Display */
@@ -89,7 +89,7 @@
       background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
       cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
       transition: all 0.3s;
-      white-space: nowrap; /* 버튼 텍스트 줄바꿈 방지 */
+      white-space: nowrap; 
     }
     button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
 
@@ -100,7 +100,7 @@
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* Polaroid */
+    /* [수정 2] 폴라로이드 스타일 (기본 PC/태블릿) */
     .polaroid {
       position: fixed; top: 50%; left: 50%; width: 280px; 
       background: #fff; padding: 15px 15px 50px 15px;
@@ -185,29 +185,30 @@
       background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
       color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
       display: none; backdrop-filter: blur(10px); text-align: center;
-      width: 80%; /* 모바일에서 너무 넓지 않게 */
+      width: 80%; /* 모바일 대응 */
     }
     #snap { display: none; }
 
-    /* [수정 2] 모바일 전용 반응형 스타일 (화면 폭 768px 이하) */
+    /* [수정 3] 모바일 전용 미디어 쿼리 (화면 폭 768px 이하일 때 적용) */
     @media (max-width: 768px) {
-        /* 타이틀 및 UI 크기 조정 */
+        /* UI 폰트 크기 조정 */
         #brand-title { font-size: 12px; }
         #timer-display { font-size: 60px; margin-top: 5px; }
         #status-bar { font-size: 14px; margin-top: 5px; }
         
-        /* 폴라로이드: 화면 비율(vw)에 맞춰 너비 조정 */
+        /* [핵심] 폴라로이드 크기 비율로 변경 (화면의 55%) */
         .polaroid { 
-            width: 75vw; /* 화면의 75% 너비 */
-            padding: 10px 10px 40px 10px; /* 패딩 약간 축소 */
+            width: 55vw; 
+            padding: 10px 10px 40px 10px; 
         }
-        .polaroid-text { font-size: 22px; } /* 텍스트 크기 조정 */
+        .polaroid-text { font-size: 18px; margin-top: 10px; } 
+        .polaroid-watermark { font-size: 7px; margin-top: 8px; }
 
-        /* 갤러리 아이템: 화면 비율에 맞춰 조정 */
+        /* 갤러리 아이템 크기 비율로 변경 */
         .gallery-item {
-            width: 80vw; /* 화면의 80% 너비 */
+            width: 65vw; 
             margin-right: 20px;
-            padding-bottom: 50px;
+            padding: 10px 10px 50px 10px;
         }
         
         /* 버튼 크기 조정 */
