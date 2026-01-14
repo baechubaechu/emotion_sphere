@@ -1,192 +1,201 @@
 <style>
-  /* === [1. 기본 레이아웃 (공통)] === */
-  body { margin: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; }
-  
-  #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
-
-  /* 카메라 비율 유지하며 꽉 채우기 */
-  #cam {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    object-fit: cover; transform: scaleX(-1); z-index: 1;
-    filter: brightness(0.7) contrast(1.1); 
-  }
-  #three-canvas {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 2; pointer-events: none;
-  }
-
-  /* === [2. UI 레이어 (반응형 적용)] === */
-  #ui-layer {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 90; pointer-events: none;
-    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
-    /* 노치 디자인 대응 (아이폰 등) */
-    padding: max(30px, env(safe-area-inset-top)) 20px max(30px, env(safe-area-inset-bottom)) 20px;
-    box-sizing: border-box;
-    opacity: 0; transition: opacity 0.5s;
-  }
-  #ui-layer.visible { opacity: 1; }
-
-  #brand-title {
-    font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
-    margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
-    text-align: center;
-  }
-
-  /* 타이머: 화면 크기에 따라 글자 크기 자동 조절 (clamp 사용) */
-  #timer-display {
-    font-size: clamp(40px, 10vw, 80px); /* 최소 40px, 권장 10vw, 최대 80px */
-    font-weight: 700; color: #fff;
-    margin-top: 10px; letter-spacing: 2px;
-    text-shadow: 0 0 20px rgba(255,255,255,0.5);
-    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
-  }
-  #timer-label {
-    font-size: 12px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 2px; margin-top: -5px;
-  }
-
-  #status-bar {
-    margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
-    transition: opacity 0.5s; min-height: 20px; text-align: center;
-  }
-
-  #controls { 
-    margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
-  }
-  
-  button.main-btn {
-    padding: 14px 30px; border: 1px solid rgba(255, 255, 255, 0.5);
-    background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
-    cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
-    transition: all 0.3s;
-    white-space: nowrap; /* 버튼 텍스트 줄바꿈 방지 */
-  }
-  button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
-
-  /* === [3. 오버레이 및 팝업] === */
-  #intro-overlay, #dim-overlay, #flash-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none;
-  }
-  #dim-overlay { background: rgba(0, 0, 0, 0.8); z-index: 80; opacity: 0; transition: opacity 0.3s ease; }
-  #dim-overlay.active { opacity: 1; }
-  
-  #flash-overlay { background: #fff; z-index: 9999; opacity: 0; transition: opacity 0.1s ease-out; }
-
-  #intro-overlay {
-    background: #000; z-index: 150;
-    display: flex; justify-content: center; align-items: center;
-    opacity: 0; transition: opacity 0.5s ease;
-  }
-  #intro-overlay.active { opacity: 1; pointer-events: auto; }
-  #intro-text {
-    color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
-    text-align: center; line-height: 1.6;
-    padding: 0 20px; /* 모바일에서 텍스트 잘림 방지 */
-  }
-
-  #start-screen {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000; z-index: 100;
-    display: flex; flex-direction: column; justify-content: center; align-items: center;
-    transition: opacity 0.8s;
-  }
-  #startBtn {
-    border: 1px solid #fff; background: transparent; color: #fff;
-    padding: 15px 40px; font-size: 18px; letter-spacing: 4px;
-    cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
-    max-width: 80%; /* 모바일에서 버튼 너무 크면 줄임 */
-  }
-
-  /* === [4. 폴라로이드 & 갤러리 (반응형 핵심)] === */
-  .polaroid {
-    position: fixed; top: 50%; left: 50%; 
-    /* 고정 px 대신 화면 비율(vw) 사용 */
-    width: clamp(200px, 60vw, 350px); 
-    background: #fff; padding: 15px 15px 50px 15px;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.6); z-index: 95;
-    transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
-    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); opacity: 0;
-  }
-  .polaroid.animate-to-corner {
-    transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
-    transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
-  }
-  .polaroid img { width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; opacity: 0.85; }
-  .polaroid-text {
-    font-family: 'Caveat', cursive; font-size: clamp(18px, 5vw, 28px); 
-    color: #222; text-align: center; margin-top: 15px; line-height: 1.1;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .polaroid-watermark {
-    font-family: 'Pretendard', sans-serif; font-size: 8px; color: #888;
-    text-align: center; margin-top: 12px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
-    border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
-  }
-
-  /* 갤러리 화면 */
-  #gallery-screen {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(10, 10, 10, 0.98); z-index: 200; 
-    display: none; flex-direction: column; justify-content: center; align-items: center;
-    opacity: 0; transition: opacity 0.5s;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
-
-  #gallery-viewport {
-    width: 100%; height: 60%; overflow: hidden;
-    display: flex; align-items: center; position: relative;
-  }
-  #gallery-container {
-    display: flex; align-items: center;
-    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
-    will-change: transform; padding-left: 50%;
-  }
-
-  .gallery-item {
-    flex: 0 0 auto; 
-    /* 모바일에서는 화면의 70%, 태블릿에선 300px 고정 */
-    width: clamp(240px, 70vw, 400px);
-    background: #fff; padding: 15px 15px 60px 15px;
-    box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    margin-right: 20px; transform: scale(0.5); opacity: 0.5; z-index: 1;
-    transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-  }
-  .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
-  .gallery-item img { 
-    width: 100%; display: block; border: 1px solid #eee; 
-    opacity: 0.9; filter: brightness(0.9) contrast(1.2) saturate(1.1);
-  }
-
-  #gallery-controls { margin-top: 20px; display: flex; gap: 20px; }
-  
-  /* 경고 메시지 & 캔버스 */
-  #warning-msg {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
-    color: #ffcece; font-size: 16px; padding: 15px 30px; border-radius: 8px;
-    display: none; backdrop-filter: blur(10px); text-align: center;
-    width: 80%; /* 모바일 대응 */
-  }
-  #snap { display: none; }
-
-  @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
-  /* === [5. 모바일 전용 미디어 쿼리] === */
-  /* 화면 폭이 좁은 스마트폰(세로 모드)일 때 강제 조정 */
-  @media (max-width: 768px) {
-    #timer-display { margin-top: 5px; }
-    #status-bar { font-size: 14px; margin-top: 5px; }
-    #brand-title { font-size: 12px; margin-top: 0; }
+    /* [1. 기본 초기화: html, body 높이 100% 강제] */
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
     
-    /* 갤러리 아이템 간격 좁히기 */
-    .gallery-item { margin-right: 15px; padding-bottom: 50px; }
+    #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; z-index: 1; }
+
+    /* 카메라 화면 꽉 채우기 */
+    #cam {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      object-fit: cover; transform: scaleX(-1); z-index: 1;
+      filter: brightness(0.7) contrast(1.1); 
+    }
+    #three-canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 2; pointer-events: none;
+    }
+
+    /* [2. UI 레이어: 안전한 패딩 방식 사용] */
+    #ui-layer {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 90; pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+      box-sizing: border-box;
+      /* 기본 패딩 */
+      padding: 30px 20px;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    /* 아이폰 노치 대응 (지원하는 기기만 적용) */
+    @supports (padding-top: env(safe-area-inset-top)) {
+      #ui-layer {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+    }
+    #ui-layer.visible { opacity: 1; }
+
+    #brand-title {
+      font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 4px; text-transform: uppercase;
+      margin-top: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;
+      text-align: center;
+    }
+
+    /* 타이머: 기본 크기 (PC/태블릿) */
+    #timer-display {
+      font-size: 80px; font-weight: 700; color: #fff;
+      margin-top: 10px; letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+      font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    }
+    #timer-label {
+      font-size: 12px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 2px; margin-top: -5px;
+    }
+
+    #status-bar {
+      margin-top: 10px; font-size: 16px; color: #fff; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+      transition: opacity 0.5s; min-height: 20px; text-align: center;
+    }
+
+    #controls { 
+      margin-bottom: 20px; pointer-events: auto; display: flex; gap: 15px; z-index: 100;
+    }
     
-    /* 갤러리 컨트롤 버튼 크기 조정 */
-    button.reset-btn { font-size: 14px; padding: 12px 25px; }
+    button.main-btn {
+      padding: 14px 30px; border: 1px solid rgba(255, 255, 255, 0.5);
+      background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 14px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    button.main-btn:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.3); }
+
+    /* [3. 오버레이] */
+    #dim-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8); z-index: 80; 
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    #dim-overlay.active { opacity: 1; }
     
-    /* 인트로 텍스트 줄이기 */
-    #intro-text { font-size: 20px; }
-  }
+    #flash-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #fff; z-index: 9999; pointer-events: none;
+      opacity: 0; transition: opacity 0.1s ease-out;
+    }
+
+    /* 인트로 오버레이: 기본적으로 투명하게 시작 */
+    #intro-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #000; z-index: 150;
+      display: flex; justify-content: center; align-items: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
+    }
+    #intro-overlay.active { opacity: 1; pointer-events: auto; }
+    #intro-text {
+      color: #fff; font-size: 24px; font-weight: 300; letter-spacing: 2px;
+      text-align: center; line-height: 1.6; padding: 0 20px;
+    }
+
+    /* [4. 시작 화면 (가장 중요)] */
+    #start-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #000; z-index: 100;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      transition: opacity 0.8s;
+    }
+    #startBtn {
+      border: 1px solid #fff; background: transparent; color: #fff;
+      padding: 15px 40px; font-size: 18px; letter-spacing: 4px;
+      cursor: pointer; animation: pulse 2s infinite; pointer-events: auto;
+      max-width: 80%;
+    }
+    @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+    /* 경고 메시지 */
+    #warning-msg {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
+      color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
+      display: none; backdrop-filter: blur(10px); text-align: center; width: 80%;
+    }
+    #snap { display: none; }
+
+    /* [5. 갤러리 및 폴라로이드] */
+    .polaroid {
+      position: fixed; top: 50%; left: 50%; width: 280px; 
+      background: #fff; padding: 15px 15px 50px 15px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.6); z-index: 95;
+      transform: translate(-50%, -50%) scale(1.2) rotate(0deg);
+      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1); opacity: 0;
+    }
+    .polaroid.animate-to-corner {
+      transform: translate(0, 0) scale(0.35) rotate(-5deg) !important;
+      transition: all 0.4s cubic-bezier(0.5, 0, 0, 1);
+    }
+    .polaroid img { width: 100%; height: auto; display: block; background: #000; border: 1px solid #eee; opacity: 0.85; }
+    .polaroid-text {
+      font-family: 'Caveat', cursive; font-size: 28px; color: #222;
+      text-align: center; margin-top: 15px; line-height: 1.1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .polaroid-watermark {
+      font-family: 'Pretendard', sans-serif; font-size: 8px; color: #888;
+      text-align: center; margin-top: 12px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;
+      border-top: 1px solid #eee; padding-top: 8px; width: 80%; margin-left: 10%;
+    }
+
+    #gallery-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(10, 10, 10, 0.98); z-index: 200; 
+      display: none; flex-direction: column; justify-content: center; align-items: center;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    #gallery-screen.active { display: flex; opacity: 1; pointer-events: auto; }
+
+    #gallery-viewport {
+      width: 100%; height: 60%; overflow: hidden;
+      display: flex; align-items: center; position: relative;
+    }
+    #gallery-container {
+      display: flex; align-items: center;
+      transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); 
+      will-change: transform; padding-left: 50%;
+    }
+    .gallery-item {
+      flex: 0 0 auto; width: 300px; 
+      background: #fff; padding: 15px 15px 60px 15px;
+      box-sizing: border-box; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      margin-right: 40px; transform: scale(0.5); opacity: 0.5; z-index: 1;
+      transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .gallery-item.active { transform: scale(1.0); opacity: 1; z-index: 10; box-shadow: 0 30px 60px rgba(0,0,0,1); }
+    .gallery-item img { width: 100%; display: block; border: 1px solid #eee; opacity: 0.9; filter: brightness(0.9) contrast(1.2) saturate(1.1); }
+    
+    #gallery-controls { margin-top: 30px; display: flex; gap: 20px; }
+    button.reset-btn {
+      padding: 16px 30px; border: 1px solid rgba(255, 100, 100, 0.4);
+      background: rgba(100, 0, 0, 0.6); color: #ffcccc; font-size: 16px; letter-spacing: 2px;
+      cursor: pointer; border-radius: 50px; backdrop-filter: blur(5px); text-transform: uppercase;
+    }
+
+    /* === [6. 모바일 전용 (화면폭 768px 이하)] === */
+    @media (max-width: 768px) {
+      /* 타이머 및 텍스트 크기 축소 */
+      #timer-display { font-size: 50px; margin-top: 5px; }
+      #status-bar { font-size: 14px; margin-top: 5px; }
+      #brand-title { font-size: 12px; margin-top: 0; }
+      
+      /* 폴라로이드 크기를 화면 비율(vw)로 변경 */
+      .polaroid { width: 70vw; padding: 10px 10px 40px 10px; }
+      .polaroid-text { font-size: 20px; }
+      
+      /* 갤러리 아이템도 화면 비율로 */
+      .gallery-item { width: 75vw; margin-right: 15px; padding-bottom: 50px; }
+      
+      /* 버튼 및 여백 조정 */
+      button.reset-btn { font-size: 14px; padding: 12px 25px; }
+      #gallery-controls { margin-top: 15px; }
+      
+      #intro-text { font-size: 20px; }
+    }
 </style>
