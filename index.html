@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Pretendard:wght@300;500;700&display=swap" rel="stylesheet">
 
   <style>
-    /* [수정 1] 높이 강제 지정 (모바일 검은 화면 방지) */
+    /* [기본 설정] */
     html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Pretendard', sans-serif; user-select: none; touch-action: none; }
     
     #container { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; }
@@ -100,7 +100,7 @@
       opacity: 0; transition: opacity 0.1s ease-out;
     }
 
-    /* [수정 2] 폴라로이드 스타일 (기본 PC/태블릿) */
+    /* Polaroid - 기본(PC/태블릿) */
     .polaroid {
       position: fixed; top: 50%; left: 50%; width: 280px; 
       background: #fff; padding: 15px 15px 50px 15px;
@@ -185,18 +185,16 @@
       background: rgba(255, 50, 50, 0.3); border: 1px solid rgba(255, 100, 100, 0.5);
       color: #ffcece; font-size: 18px; padding: 15px 30px; border-radius: 8px;
       display: none; backdrop-filter: blur(10px); text-align: center;
-      width: 80%; /* 모바일 대응 */
+      width: 80%;
     }
     #snap { display: none; }
 
-    /* [수정 3] 모바일 전용 미디어 쿼리 (화면 폭 768px 이하일 때 적용) */
+    /* 모바일 전용 (화면폭 768px 이하) */
     @media (max-width: 768px) {
-        /* UI 폰트 크기 조정 */
         #brand-title { font-size: 12px; }
         #timer-display { font-size: 60px; margin-top: 5px; }
         #status-bar { font-size: 14px; margin-top: 5px; }
         
-        /* [핵심] 폴라로이드 크기 비율로 변경 (화면의 55%) */
         .polaroid { 
             width: 55vw; 
             padding: 10px 10px 40px 10px; 
@@ -204,18 +202,15 @@
         .polaroid-text { font-size: 18px; margin-top: 10px; } 
         .polaroid-watermark { font-size: 7px; margin-top: 8px; }
 
-        /* 갤러리 아이템 크기 비율로 변경 */
         .gallery-item {
             width: 65vw; 
             margin-right: 20px;
             padding: 10px 10px 50px 10px;
         }
         
-        /* 버튼 크기 조정 */
         button.reset-btn { font-size: 14px; padding: 12px 25px; }
         #startBtn { font-size: 16px; padding: 12px 30px; width: 80%; text-align: center; }
         
-        /* 인트로 텍스트 */
         #intro-text { font-size: 20px; line-height: 1.5; }
     }
   </style>
@@ -372,7 +367,7 @@ startBtn.addEventListener("click", async () => {
     // 2. Show Intro (Blackout with Text)
     introOverlay.classList.add('active');
 
-    // 3. Wait 2 seconds, then Start Session
+    // 3. Wait 0.5 seconds (Faster), then Start Session
     setTimeout(() => {
         introOverlay.classList.remove('active');
         uiLayer.classList.add('visible'); // Show UI
@@ -381,7 +376,7 @@ startBtn.addEventListener("click", async () => {
         statusBar.textContent = "Ready";
         
         startSession();
-    }, 2000);
+    }, 500); // 0.5초로 단축
 
   } catch (e) { alert("카메라 권한이 필요합니다."); }
 });
@@ -396,6 +391,9 @@ function startSession() {
     timerDisplay.textContent = sessionTimeLeft;
     timerDisplay.style.color = "#fff";
     
+    // [FIX] Start Analyzing IMMEDIATELY (Don't wait 700ms)
+    captureAndAnalyze();
+
     // Start AR Loop
     loopInterval = setInterval(() => {
         if (!isProcessing) captureAndAnalyze();
@@ -638,9 +636,13 @@ function triggerSnapshot(label) {
   setTimeout(() => {
     dimOverlay.classList.remove('active');
 
-    const offsetX = (photoCount - 1) * 100; 
-    const targetRight = 20 + offsetX;
-    const targetBottom = 30; 
+    // [FIX] Stacking Logic (Instead of spreading out)
+    // Pile them in the corner with random jitter
+    const jitterX = (Math.random() - 0.5) * 20; // -10 to 10px
+    const jitterY = (Math.random() - 0.5) * 20;
+    
+    const targetRight = 20 + jitterX;
+    const targetBottom = 30 + jitterY; 
 
     polaroid.style.top = 'auto';
     polaroid.style.left = 'auto';
@@ -652,7 +654,7 @@ function triggerSnapshot(label) {
     
     setTimeout(() => { snapshotCooldown = false; }, 2000);
 
-  }, 1000); 
+  }, 300); // [FIX] Move away after 0.3s (Much faster)
 }
 
 async function captureAndAnalyze() {
